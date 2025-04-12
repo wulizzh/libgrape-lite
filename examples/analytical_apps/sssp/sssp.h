@@ -208,44 +208,61 @@ class SSSP : public ParallelAppBase<FRAG_T, SSSPContext<FRAG_T>>,
 #endif
   }
 private:
-  void processPrivate(const fragment_t& frag, context_t& ctx,
-             message_manager_t& messages) {
+    void processPrivate(const fragment_t& frag, context_t& ctx,
+                    message_manager_t& messages) {
+    // 从连接池中获取一个可用连接（共享内存 + TEE 通道）
     auto conn = ctx.connection_pool.acquire();
 
-    //compare and get active
+    // 重置共享内存，清零或准备状态
     conn->resetSharedMemory();
-    uint64_t index = 0;
-    uint64_t size = 0;
-    auto current = static_cast<double*>(conn->sssp_get_current_buffer(size));
-    auto target = static_cast<double*>(conn->sssp_get_target_buffer(size));
 
-    for (auto vid : ctx.private_potential_result.keys()) {
-      vertex_t v;
-      frag.GetVertex(vid, v);
+    // 获取当前和目标 buffer（void*）以及它们的总字节大小
+    size_t buffer_bytes = 0;
+    double* current = static_cast<double*>(conn->sssp_get_current_buffer(buffer_bytes));
+    double* target = static_cast<double*>(conn->sssp_get_target_buffer(buffer_bytes));
 
-      current[index] = ctx.partial_result[v];
-      target[index] = ctx.private_potential_result.get(vid).value();
+    // 将字节数转换为最多可容纳多少个 double 元素
+    size_t buffer_capacity = buffer_bytes / sizeof(double);
 
-      index ++;
+    // 遍历所有待处理的私有节点（这些节点是 potential 的候选人）
+    auto& keys = ctx.private_potential_result.keys();
+    size_t total_keys = keys.size();
+    //这里是记录隐私节点个数？那么他怎么和上面的容量比较呢？current和target存的是距离？是double还是int？
+    // 分批处理每一段，不超过共享内存 buffer_capacity
+    for (size_t offset = 0; offset < total_keys; offset += buffer_capacity) {
+        size_t batch_size = std::min(buffer_capacity, total_keys - offset);
 
+        // 写入 current / target buffer，准备进行 TEE 比较
+        for (size_t i = 0; i < batch_size; ++i) {
+            vid_t vid = keys[offset + i];
+            vertex_t v;
+            frag.GetVertex(vid, v);
+
+            current[i] = ctx.partial_result[v];
+            target[i] = ctx.private_potential_result.get(vid).value();
+        }
+
+        // 调用 TEE 中的比较逻辑：结果将反映在 target[i] 中（是否更优）
+        conn->sssp_compare();
+
+        // 根据比较结果更新当前 fragment 的结果，并标记 modified
+        for (size_t i = 0; i < batch_size; ++i) {
+            vid_t vid = keys[offset + i];
+            vertex_t v;
+            frag.GetVertex(vid, v);
+
+            // 注意这里 target[i] > 0 表示 TEE 认为当前值更优
+            if (target[i] > 0) {
+                ctx.partial_result[v] = current[i];
+                ctx.next_modified.Insert(v);
+            }
+        }
     }
-    conn->sssp_compare();
 
-    //send message
-    index = 0;
-    for (auto vid : ctx.private_potential_result.keys()) {
-      vertex_t v;
-      frag.GetVertex(vid, v);
-      if (target[index] > 0) {
-        ctx.partial_result[v] = current[index];
-        ctx.next_modified.Insert(v);
-      }
-      index ++;
-    }
+    // 清空待处理隐私节点缓存，释放连接资源
     ctx.private_potential_result.clear();
     ctx.connection_pool.release(conn);
-    //next_modify active list
-  }
+}
 
 };
 
