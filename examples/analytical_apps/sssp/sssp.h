@@ -234,7 +234,7 @@ private:
 
         // 写入 current / target buffer，准备进行 TEE 比较
         for (size_t i = 0; i < batch_size; ++i) {
-            vid_t vid = keys[offset + i];
+            auto vid = keys[offset + i];
             vertex_t v;
             frag.GetVertex(vid, v);
 
@@ -247,7 +247,7 @@ private:
 
         // 根据比较结果更新当前 fragment 的结果，并标记 modified
         for (size_t i = 0; i < batch_size; ++i) {
-            vid_t vid = keys[offset + i];
+            auto vid = keys[offset + i];
             vertex_t v;
             frag.GetVertex(vid, v);
 
