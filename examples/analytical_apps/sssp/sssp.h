@@ -225,7 +225,7 @@ private:
     size_t buffer_capacity = buffer_bytes / sizeof(double);
 
     // 遍历所有待处理的私有节点（这些节点是 potential 的候选人）
-    auto& keys = ctx.private_potential_result.keys();
+    auto keys = ctx.private_potential_result.keys();
     size_t total_keys = keys.size();
     //这里是记录隐私节点个数？那么他怎么和上面的容量比较呢？current和target存的是距离？是double还是int？
     // 分批处理每一段，不超过共享内存 buffer_capacity
