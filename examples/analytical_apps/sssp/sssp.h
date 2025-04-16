@@ -208,8 +208,7 @@ class SSSP : public ParallelAppBase<FRAG_T, SSSPContext<FRAG_T>>,
 #endif
   }
 private:
-    
-void processPrivate(const fragment_t& frag, context_t& ctx,
+    void processPrivate(const fragment_t& frag, context_t& ctx,
                     message_manager_t& messages) {
     // 从连接池中获取一个可用连接（共享内存 + TEE 通道）
     auto conn = ctx.connection_pool.acquire();
@@ -226,16 +225,16 @@ void processPrivate(const fragment_t& frag, context_t& ctx,
     size_t buffer_capacity = buffer_bytes / sizeof(double);
 
     // 遍历所有待处理的私有节点（这些节点是 potential 的候选人）
-    auto& keys = ctx.private_potential_result.keys();
+    auto keys = ctx.private_potential_result.keys();
     size_t total_keys = keys.size();
-    //这里是记录隐私节点个数？那么他怎么和上面的容量比较呢？current和target存的是距离？是double
+    //这里是记录隐私节点个数？那么他怎么和上面的容量比较呢？current和target存的是距离？是double还是int？
     // 分批处理每一段，不超过共享内存 buffer_capacity
     for (size_t offset = 0; offset < total_keys; offset += buffer_capacity) {
         size_t batch_size = std::min(buffer_capacity, total_keys - offset);
 
         // 写入 current / target buffer，准备进行 TEE 比较
         for (size_t i = 0; i < batch_size; ++i) {
-            vid_t vid = keys[offset + i];
+            auto vid = keys[offset + i];
             vertex_t v;
             frag.GetVertex(vid, v);
 
@@ -248,7 +247,7 @@ void processPrivate(const fragment_t& frag, context_t& ctx,
 
         // 根据比较结果更新当前 fragment 的结果，并标记 modified
         for (size_t i = 0; i < batch_size; ++i) {
-            vid_t vid = keys[offset + i];
+            auto vid = keys[offset + i];
             vertex_t v;
             frag.GetVertex(vid, v);
 
