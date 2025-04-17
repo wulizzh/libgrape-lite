@@ -37,11 +37,17 @@ class HashPartitioner {
   HashPartitioner(size_t frag_num, std::vector<OID_T>&) : fnum_(frag_num) {}
 
   inline fid_t GetPartitionId(const OID_T& oid) const {
+	      auto iter = override_map_.find(oid);
+    if (iter != override_map_.end()) {
+      return iter->second;
+    }
+    //zyz
     return static_cast<fid_t>(static_cast<uint64_t>(oid) % fnum_);
   }
 
   void SetPartitionId(const OID_T& oid, fid_t fid) {
-    LOG(FATAL) << "not support";
+   //  LOG(FATAL) << "not support";
+    override_map_[oid] = fid;//zyz
   }
 
   HashPartitioner& operator=(const HashPartitioner& other) {
@@ -49,6 +55,7 @@ class HashPartitioner {
       return *this;
     }
     fnum_ = other.fnum_;
+    override_map_ = other.override_map_;//zyz
     return *this;
   }
 
@@ -57,6 +64,7 @@ class HashPartitioner {
       return *this;
     }
     fnum_ = other.fnum_;
+    override_map_ = std::move(other.override_map_);//zyz
     return *this;
   }
 
@@ -72,6 +80,7 @@ class HashPartitioner {
 
  private:
   fid_t fnum_;
+  ska::flat_hash_map<OID_T, fid_t> override_map_;//zyz
 };
 
 template <>
@@ -134,6 +143,7 @@ class HashPartitioner<std::string> {
  private:
   fid_t fnum_;
 };
+
 
 /**
  * @brief SegmentedPartitioner is a partitioner with a strategy of chunking
