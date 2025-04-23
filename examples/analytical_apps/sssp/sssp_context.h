@@ -21,6 +21,10 @@ limitations under the License.
 #include <limits>
 #include <chrono>
 
+#ifdef WITH_TEE
+#include "TEE/connection_pool.h"
+#endif
+
 #include <grape/grape.h>
 #include <grape/utils/thread_safe_mapper.h>
 
@@ -39,8 +43,13 @@ class SSSPContext : public VertexDataContext<FRAG_T, double> {
 
   explicit SSSPContext(const FRAG_T& fragment)
       : VertexDataContext<FRAG_T, double>(fragment, true),
-        partial_result(this->data()),
-        connection_pool(1){}
+        partial_result(this->data())
+#ifdef WITH_TEE
+        , connection_pool(1)
+#endif
+      {}
+      
+        
 
   void Init(ParallelMessageManager& messages, oid_t source_id) {
     auto& frag = this->fragment();
@@ -90,7 +99,10 @@ class SSSPContext : public VertexDataContext<FRAG_T, double> {
   long int private_count = 0;
   int private_count_iter = 0;
   std::ofstream ostream;
+#ifdef WITH_TEE
   ConnectionPool connection_pool;
+#endif
+  
 
 #ifdef PROFILING
   double preprocess_time = 0;

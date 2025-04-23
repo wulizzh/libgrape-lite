@@ -27,6 +27,7 @@
 #ifndef TA_TEE_CONNECTION_H
 #define TA_TEE_CONNECTION_H
 
+#ifdef WITH_TEE 
 
 /*
  * This UUID is generated with uuidgen
@@ -43,4 +44,5 @@
 #define TA_TEE_CONNECTION_SHARED_MEM	3
 #define TA_TEE_CONNECTION_SSSP			4
 
+#endif
 #endif /*TA_TEE_CONNECTION_H*/

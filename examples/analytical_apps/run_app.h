@@ -43,8 +43,8 @@ limitations under the License.
 #include "bfs/bfs_auto.h"
 #include "cdlp/cdlp.h"
 #include "cdlp/cdlp_auto.h"
-#include "cdlp/cdlp_selective.h"//添加新算法
-#include "jaccard/jaccard.h"
+//#include "cdlp/cdlp_selective.h"//添加新算法
+//#include "jaccard/jaccard.h"
 #include "flags.h"
 #include "lcc/lcc.h"
 #include "lcc/lcc_auto.h"
@@ -272,15 +272,16 @@ void Run() {
       CreateAndQuery<OID_T, VID_T, VDATA_T, EmptyType, LoadStrategy::kOnlyOut,
                      LCC>(comm_spec, out_prefix, fnum, spec,
                           FLAGS_degree_threshold);
-    } else if (name == "cdlp_selective"){
-      CreateAndQuery<OID_T, VID_T, int, EmptyType, LoadStrategy::kOnlyOut,//VDATA_T无法通过run_app.cc传进来，必须这里手写，grape的bug，sssp的EDATA_T也是这样
-                     CDLPSelective, int>(comm_spec, out_prefix, fnum, spec,
-                                FLAGS_cdlp_mr);
-    } else if (name == "jaccard"){
-      CreateAndQuery<OID_T, VID_T, int, EmptyType, LoadStrategy::kOnlyOut,//VDATA_T无法通过run_app.cc传进来，必须这里手写，grape的bug，sssp的EDATA_T也是这样
-                     Jaccard, int>(comm_spec, out_prefix, fnum, spec,
-                                FLAGS_cdlp_mr);
-    } else {
+    } //else if (name == "cdlp_selective"){
+      //CreateAndQuery<OID_T, VID_T, int, EmptyType, LoadStrategy::kOnlyOut,//VDATA_T无法通过run_app.cc传进来，必须这里手写，grape的bug，sssp的EDATA_T也是这样
+       //              CDLPSelective, int>(comm_spec, out_prefix, fnum, spec,
+       //                         FLAGS_cdlp_mr);
+    //} else if (name == "jaccard"){
+     //CreateAndQuery<OID_T, VID_T, int, EmptyType, LoadStrategy::kOnlyOut,//VDATA_T无法通过run_app.cc传进来，必须这里手写，grape的bug，sssp的EDATA_T也是这样
+      //               Jaccard, int>(comm_spec, out_prefix, fnum, spec,
+      //                          FLAGS_cdlp_mr);
+   // }
+     else {
       LOG(FATAL) << "No avaiable application named [" << name << "].";
     }
   }

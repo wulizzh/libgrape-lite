@@ -18,7 +18,12 @@ limitations under the License.
 
 #include <grape/grape.h>
 
+#ifdef WITH_TEE
+#include "TEE/connection_pool.h"
+#endif
+
 #include "sssp/sssp_context.h"
+
 
 namespace grape {
 
@@ -90,7 +95,9 @@ class SSSP : public ParallelAppBase<FRAG_T, SSSPContext<FRAG_T>>,
         }
 
       }
+      #ifdef WITH_TEE
       processPrivate(frag, ctx, messages);
+      #endif
     }
     auto outer_vertices = frag.OuterVertices();
     ForEach(ctx.next_modified, outer_vertices,
@@ -175,7 +182,9 @@ class SSSP : public ParallelAppBase<FRAG_T, SSSPContext<FRAG_T>>,
                 }
               }
             });
+    #ifdef WITH_TEE
     processPrivate(frag, ctx, messages);
+    #endif  
 
     // ctx.ostream << ctx.private_count_iter << std::endl;
     // put messages into channels corresponding to the destination fragments.
@@ -207,9 +216,11 @@ class SSSP : public ParallelAppBase<FRAG_T, SSSPContext<FRAG_T>>,
     ctx.postprocess_time += GetCurrentTime();
 #endif
   }
+#ifdef WITH_TEE 
 private:
     void processPrivate(const fragment_t& frag, context_t& ctx,
                     message_manager_t& messages) {
+    //std::cout << "开开开开开" << std::endl;
     // 从连接池中获取一个可用连接（共享内存 + TEE 通道）
     auto conn = ctx.connection_pool.acquire();
 
@@ -263,7 +274,7 @@ private:
     ctx.private_potential_result.clear();
     ctx.connection_pool.release(conn);
 }
-
+#endif
 };
 
 }  // namespace grape

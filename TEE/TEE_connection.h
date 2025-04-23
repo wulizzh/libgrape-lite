@@ -5,6 +5,8 @@
 #ifndef TEE_CONNECTION_H
 #define TEE_CONNECTION_H
 
+#ifdef WITH_TEE 
+
 #include <err.h>
 #include <string.h>
 #include <iostream>
@@ -269,5 +271,6 @@ class TEE_connection {
 };
 
 
+#endif
 
 #endif //TEE_CONNECTION_H

@@ -44,9 +44,10 @@ int main(int argc, char* argv[]) {
   } else {
     if (name.find("sssp") != std::string::npos) {
       grape::Run<int64_t, uint32_t, grape::EmptyType, double>();
-    } else if( name == "cdlp_selective" ){
-      grape::Run<int64_t, uint32_t, int, grape::EmptyType>();
-    } else {
+    } //else if( name == "cdlp_selective" ){
+      //grape::Run<int64_t, uint32_t, int, grape::EmptyType>();
+    //} 
+    else {
       grape::Run<int64_t, uint32_t, grape::EmptyType, grape::EmptyType>();
     }
   }

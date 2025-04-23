@@ -5,6 +5,8 @@
 #ifndef CONNECTIONPOOL_H
 #define CONNECTIONPOOL_H
 
+#ifdef WITH_TEE  
+
 #include <iostream>
 #include <vector>
 #include <queue>
@@ -53,5 +55,7 @@ private:
     std::mutex mutex_;
     std::condition_variable cond_;
 };
+
+#endif
 
 #endif //CONNECTIONPOOL_H
