@@ -133,7 +133,7 @@ class EVFragmentLoader {
 for (size_t i = 0; i < id_list.size(); ++i) {
   if (vprivacy_list[i] == 1) {
    // partitioner.SetPartitionId(id_list[i], 0);
-       fid_t fid = privacy_counter % 3;
+       fid_t fid = privacy_counter % 6;
     partitioner.SetPartitionId(id_list[i], fid);
     ++privacy_counter;
   }
