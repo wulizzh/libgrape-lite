@@ -21,6 +21,7 @@ limitations under the License.
 #include <fstream>
 #include <string>
 #include <vector>
+#include <hdfs.h>
 
 #include "grape/io/io_adaptor_base.h"
 
@@ -63,6 +64,7 @@ class LocalIOAdaptor : public IOAdaptorBase {
   bool IsExist() override;
 
  private:
+  enum IOType { LOCAL, HDFS };  // 新增 IO 类型判断
   static constexpr size_t LINE_SIZE = 65535;
 
   enum FileLocation {
@@ -70,6 +72,19 @@ class LocalIOAdaptor : public IOAdaptorBase {
     kFileLocationCurrent = 1,
     kFileLocationEnd = 2,
   };
+
+  // HDFS 专用辅助函数
+  void hdfsOpen1(const char* mode);
+  bool hdfsClose1();
+  bool hdfsReadLine1(std::string& line);
+  //bool hdfsReadArchive1(OutArchive& archive);
+  //bool hdfsWriteArchive1(InArchive& archive);
+  bool hdfsRead1(void* buffer, size_t size);
+  bool hdfsFillBuffer();
+  void hdfsSeek1(const int64_t offset, const FileLocation seek_from);
+  // bool hdfsWrite1(void* buffer, size_t size);
+  // bool hdfsMakeDirectory1(const std::string& path);
+  // bool hdfsIsExist1();
 
   int64_t tell();
   void seek(int64_t offset, FileLocation seek_from);
@@ -85,6 +100,14 @@ class LocalIOAdaptor : public IOAdaptorBase {
   std::vector<int64_t> partial_read_offset_;
   int total_parts_;
   int index_;
+  // HDFS 专用成员
+  hdfsFS hdfs_conn_ = nullptr;       // HDFS 连接句柄
+  hdfsFile hdfs_file_ = nullptr;     // HDFS 文件句柄
+  IOType io_type_ = LOCAL;           // 当前 IO 类型
+  std::string hdfs_file_path_;  // HDFS 文件路径
+  char buffer_[LINE_SIZE];
+  size_t buffer_size_ = 0;
+  size_t buffer_pos_ = 0;
 };
 }  // namespace grape
 

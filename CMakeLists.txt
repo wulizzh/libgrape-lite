@@ -250,10 +250,22 @@ endmacro()
 file(GLOB_RECURSE CORE_SRC_FILES "grape/*.cc")
 add_library(grape-lite ${CORE_SRC_FILES})
 install_libgrapelite_target(grape-lite)
-
-target_link_libraries(grape-lite ${MPI_CXX_LIBRARIES}
-                                 ${CMAKE_THREAD_LIBS_INIT}
-                                 ${GLOG_LIBRARIES})
+target_include_directories(grape-lite PUBLIC
+                             $ENV{HADOOP_HOME}/include
+                             $ENV{JAVA_HOME}/include
+                             $ENV{JAVA_HOME}/include/linux)
+# 设置库目录（等价于 -L 参数）
+target_link_directories(grape-lite PUBLIC
+                        $ENV{HADOOP_HOME}/lib/native
+                        $ENV{JAVA_HOME}/jre/lib/amd64/server
+                        )
+target_link_libraries(grape-lite PUBLIC
+                      $ENV{HADOOP_HOME}/lib/native/libhdfs.so
+                      $ENV{JAVA_HOME}/jre/lib/amd64/server/libjvm.so
+                      ${MPI_CXX_LIBRARIES}
+                      ${CMAKE_THREAD_LIBS_INIT}
+                      ${GLOG_LIBRARIES}
+                      )
 
 if (JEMALLOC_FOUND)
   target_link_libraries(grape-lite ${JEMALLOC_LIBRARIES})
