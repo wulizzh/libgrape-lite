@@ -160,3 +160,11 @@ Please cite the following paper in your publications if **GRAPE** or this repo h
 - Submit contributions using pull requests.
 
 Thank you in advance for your contributions!
+
+
+集成hdfs所需的环境变量配置
+export HADOOP_HOME=/usr/local/hadoop-3.3.6
+export PATH=$PATH:$HADOOP_HOME/bin:$HADOOP_HOME/sbin
+export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64  
+export LD_LIBRARY_PATH=$HADOOP_HOME/lib/native:$JAVA_HOME/jre/lib/amd64/server:$LD_LIBRARY_PATH
+export CLASSPATH=$($HADOOP_HOME/bin/hadoop classpath --glob):$CLASSPATH

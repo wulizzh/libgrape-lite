@@ -159,7 +159,7 @@ for (size_t i = 0; i < id_list.size(); ++i) {
       io_adaptor->Open();
       std::string line;
       edata_t e_data;
-      int32_t e_privacy;
+      int32_t e_privacy = 0;
       oid_t src, dst;
 
       size_t lineNo = 0;

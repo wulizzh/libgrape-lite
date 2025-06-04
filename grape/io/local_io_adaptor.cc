@@ -19,7 +19,10 @@ limitations under the License.
 
 #include <string>
 #include <iostream>
+
+#ifdef WITH_HDFS
 #include <hdfs.h>
+#endif
 
 #include <glog/logging.h>
 
@@ -38,19 +41,19 @@ LocalIOAdaptor::LocalIOAdaptor(std::string location)
       io_type_(location_.find("hdfs") == 0 ? HDFS : LOCAL)
       {
         //std::cout << "LocalIOAdaptor::LocalIOAdaptor" << location_ << std::endl;
+        #ifdef WITH_HDFS
         if (io_type_ == HDFS) {
             hdfs_file_path_ = location_.substr(4); // 去掉 "hdfs"
             // 初始化 HDFS 连接（这里使用默认配置，实际需支持配置参数）
             hdfs_conn_ = hdfsConnect("default", 0);  // 或从配置获取 namenode 信息
             CHECK(hdfs_conn_) << "Failed to connect to HDFS";
         }
+        #endif
       }
 
 LocalIOAdaptor::~LocalIOAdaptor() {
   //std::cout << "~LocalIOAdaptor"<< std::endl;
-  if (io_type_ == HDFS && hdfs_conn_) {
-    hdfsDisconnect(hdfs_conn_);
-  } else {
+  if(io_type_ == LOCAL) {
     if (file_ != nullptr) {
       fclose(file_);
       file_ = nullptr;
@@ -58,6 +61,12 @@ LocalIOAdaptor::~LocalIOAdaptor() {
       fs_.clear();
       fs_.close();
     }
+  } else {
+    #ifdef WITH_HDFS
+    if (hdfs_conn_) {
+      hdfsDisconnect(hdfs_conn_);
+    }
+    #endif
   }
 }
 
@@ -70,21 +79,18 @@ int64_t LocalIOAdaptor::tell() {
       return ftell(file_);
     }
   } else {
-    tOffset offset = hdfsTell(hdfs_conn_, hdfs_file_);
-    if (offset == -1) {
-      LOG(ERROR) << "Failed to get HDFS file position";
-      return -1;
-    }
-    return static_cast<int64_t>(offset);
+    #ifdef WITH_HDFS
+    return hdfsTell1(); // 调用 HDFS 专用实现
+    #else
+    return -1;
+    #endif
   }
   
 }
 
 void LocalIOAdaptor::seek(const int64_t offset, const FileLocation seek_from) {
   //std::cout << "LocalIOAdaptor::seek " << offset << " " << seek_from << std::endl;
-  if(io_type_ == HDFS) {
-    hdfsSeek1(offset, seek_from); // 调用 HDFS 专用实现
-  } else {
+  if(io_type_ == LOCAL) {
     if (using_std_getline_) {
       fs_.clear();
       if (seek_from == kFileLocationBegin) {
@@ -109,37 +115,10 @@ void LocalIOAdaptor::seek(const int64_t offset, const FileLocation seek_from) {
                 << ", seek_from = " << seek_from;
       }
     }
-  }
-}
-
-// HDFS 专用 seek 实现
-void LocalIOAdaptor::hdfsSeek1(const int64_t offset, const FileLocation seek_from) {
-  tOffset new_pos = -1;
-  switch (seek_from) {
-    case kFileLocationBegin:
-      new_pos = offset;
-      break;
-    case kFileLocationCurrent:
-      new_pos = hdfsTell(hdfs_conn_, hdfs_file_) + offset;
-      break;
-    case kFileLocationEnd:{
-      hdfsFileInfo* info = hdfsGetPathInfo(hdfs_conn_, hdfs_file_path_.c_str());
-      if (info) {
-          tOffset size = info->mSize;
-          hdfsFreeFileInfo(info, 1);  // 释放资源
-          new_pos = size + offset;
-      }
-      break;
-    }
-    default:
-      VLOG(1) << "invalid value, offset = " << offset
-              << ", seek_from = " << seek_from;
-      return;
-  }
-  
-  if (hdfsSeek(hdfs_conn_, hdfs_file_, new_pos) != 0) {
-    LOG(ERROR) << "Failed to seek to offset: " << new_pos 
-               << ", whence: " << seek_from;
+  } else {
+    #ifdef WITH_HDFS
+    hdfsSeek1(offset, seek_from); // 调用 HDFS 专用实现
+    #endif
   }
 }
 
@@ -188,30 +167,14 @@ void LocalIOAdaptor::Open(const char* mode) {
       LOG(FATAL) << "file doesn't exists. file = " << location_;
     }
   } else {
+    #ifdef WITH_HDFS
     hdfsOpen1(mode);
+    #endif
   }
   
   // check the partial read flag
   if (enable_partial_read_) {
     setPartialReadImpl();
-  }
-}
-
-// HDFS 专用 Open 实现
-void LocalIOAdaptor::hdfsOpen1(const char* mode) {
-  int hdfs_mode;
-  if (strchr(mode, 'r')) {
-    hdfs_mode = O_RDONLY;
-  } else if (strchr(mode, 'w')) {
-    hdfs_mode = O_WRONLY | O_CREAT | O_TRUNC;
-  } else if (strchr(mode, 'a')) {
-    hdfs_mode = O_WRONLY | O_CREAT | O_APPEND;
-  } else {
-    LOG(FATAL) << "Unsupported HDFS open mode: " << mode;
-  }
-  hdfs_file_ = hdfsOpenFile(hdfs_conn_, hdfs_file_path_.c_str(), hdfs_mode, 0, 0, 0);
-  if (!hdfs_file_) {
-    LOG(FATAL) << "Failed to open HDFS file: " << location_;
   }
 }
 
@@ -241,11 +204,19 @@ bool LocalIOAdaptor::SetPartialRead(const int index, const int total_parts) {
             << total_parts << "]";
     return false;
   }
+  #ifdef WITH_HDFS
   if (fs_.is_open() || file_ != nullptr || hdfs_file_ != nullptr) {
     VLOG(2) << "WARNING!! std::set partial read after open have no effect,"
                "You probably want to set partial before open!";
     return false;
   }
+  #else 
+  if (fs_.is_open() || file_ != nullptr) {
+    VLOG(2) << "WARNING!! std::set partial read after open have no effect,"
+               "You probably want to set partial before open!";
+    return false;
+  }
+  #endif
   enable_partial_read_ = true;
   index_ = index;
   total_parts_ = total_parts;
@@ -314,109 +285,13 @@ bool LocalIOAdaptor::ReadLine(std::string& line) {
       }
     }
   } else {
+    #ifdef WITH_HDFS
     // HDFS 专用读取行的实现
     return hdfsReadLine1(line);
-  }
-}
-// HDFS 专用 ReadLine 实现
-bool LocalIOAdaptor::hdfsReadLine1(std::string& line) {
-  //std::cout << "LocalIOAdaptor::ReadLine " << line << std::endl;
-  line.clear();
-  // 首次调用时初始化缓冲区
-  if (buffer_size_ == 0 && buffer_pos_ == 0) {
-    if (!hdfsFillBuffer()) {
-        return false;  // 文件为空或读取失败
-    }
-  }
-  // 从缓冲区读取数据
-
-    // 查找换行符
-    char* newline_pos = static_cast<char*>(memchr(
-        buffer_ + buffer_pos_, 
-        '\n', 
-        buffer_size_ - buffer_pos_
-    ));
-    
-    if (newline_pos != nullptr) {
-        // 找到换行符，提取一行
-        size_t line_length = newline_pos - (buffer_ + buffer_pos_) + 1;
-        line.append(buffer_ + buffer_pos_, line_length);
-        buffer_pos_ += line_length;
-        return true;
-    }
-    
-    // 缓冲区中没有完整的行
-    if (buffer_pos_ < buffer_size_) {
-        // 保存剩余内容到 line
-        line.append(buffer_ + buffer_pos_, buffer_size_ - buffer_pos_);
-        buffer_size_ = 0;
-        buffer_pos_ = 0;
-    }
-
-    
-    // 读取更多数据
-    if (!hdfsFillBuffer()) {
-        // 没有更多数据，返回已读取的内容（可能为空行）
-        return !line.empty();
-    } else {
-      // 检查新读取的数据中是否有换行符
-      newline_pos = static_cast<char*>(memchr(
-          buffer_, 
-          '\n', 
-          buffer_size_
-      ));
-      
-      if (newline_pos != nullptr) {
-          // 找到换行符，提取剩余行内容
-          size_t line_length = newline_pos - buffer_ + 1;
-          line.append(buffer_, line_length);
-          buffer_pos_ += line_length;
-          return true;
-      }
-    }
+    #else
     return false;
-}
-
-// 填充缓冲区
-bool LocalIOAdaptor::hdfsFillBuffer() {
-  int64_t bytes_to_read = LINE_SIZE;
-  int64_t total_bytes_read = 0;
-  
-  // 如果启用了分区读取，计算本次最多能读取的字节数，确保不超出分区边界
-  if (enable_partial_read_) {
-      int64_t current_pos = tell();
-      int64_t bytes_remaining = partial_read_offset_[index_ + 1] - current_pos;
-      if (bytes_remaining < bytes_to_read) {
-          bytes_to_read = bytes_remaining;
-      }
+    #endif
   }
-  if (bytes_to_read <= 0) {
-      return false;
-  }
-  
-  // 循环读取数据，直到填满缓冲区或达到分区边界,有时候一次读取不会成功，所以需要循环读取（太坑）
-  while (total_bytes_read < bytes_to_read) {
-    tSize bytesRead = hdfsRead(
-        hdfs_conn_, 
-        hdfs_file_, 
-        buffer_ + total_bytes_read,  // 写入位置偏移
-        bytes_to_read - total_bytes_read  // 剩余需要读取的字节数
-    );
-    
-    if (bytesRead <= 0) {
-        break;  // 读取失败或已到达文件末尾
-    }
-    
-    total_bytes_read += bytesRead;
-  } 
-  
-  if (total_bytes_read > 0) {
-    buffer_size_ = total_bytes_read;
-    buffer_pos_ = 0;
-    return true;
-  }
-
-  return false;
 }
 
 //sssp例子暂未用到
@@ -478,19 +353,13 @@ bool LocalIOAdaptor::Read(void* buffer, size_t size) {
     }
     return true;
   } else{
+    #ifdef WITH_HDFS
     return hdfsRead1(buffer, size);
+    #else
+    return false;
+    #endif
   }
   
-}
-
-// HDFS 专用 Read 实现
-bool LocalIOAdaptor::hdfsRead1(void* buffer, size_t size) {
-  tSize bytesRead = hdfsRead(hdfs_conn_, hdfs_file_, buffer, size);
-  if(bytesRead < 0) {
-    LOG(ERROR) << "Failed to read from HDFS file: " << location_;
-    return false;
-  }
-  return true;
 }
 
 //sssp例子暂未用到
@@ -530,19 +399,11 @@ void LocalIOAdaptor::Close() {
       }
     }
   } else {
+    #ifdef WITH_HDFS
     hdfsClose1();
+    #endif
   }
   
-}
-
-// HDFS 专用 Close 实现
-bool LocalIOAdaptor::hdfsClose1() {
-  if (hdfs_file_) {
-    hdfsCloseFile(hdfs_conn_, hdfs_file_);
-    hdfs_file_ = nullptr;
-    return true;
-  }
-  return false;
 }
 
 //sssp例子暂未用到
@@ -572,5 +433,190 @@ bool LocalIOAdaptor::IsExist() {
   //std::cout << "LocalIOAdaptor::IsExist" << std::endl; 
   return access(location_.c_str(), 0) == 0; 
 }
+#ifdef WITH_HDFS
+// HDFS 专用 tell 实现
+int64_t LocalIOAdaptor::hdfsTell1() {
+  tOffset offset = hdfsTell(hdfs_conn_, hdfs_file_);
+  if (offset == -1) {
+    LOG(ERROR) << "Failed to get HDFS file position";
+    return -1;
+  }
+  return static_cast<int64_t>(offset);
+}
 
+// HDFS 专用 seek 实现
+void LocalIOAdaptor::hdfsSeek1(const int64_t offset, const FileLocation seek_from) {
+  tOffset new_pos = -1;
+  switch (seek_from) {
+    case kFileLocationBegin:
+      new_pos = offset;
+      break;
+    case kFileLocationCurrent:
+      new_pos = hdfsTell(hdfs_conn_, hdfs_file_) + offset;
+      break;
+    case kFileLocationEnd:{
+      hdfsFileInfo* info = hdfsGetPathInfo(hdfs_conn_, hdfs_file_path_.c_str());
+      if (info) {
+          tOffset size = info->mSize;
+          hdfsFreeFileInfo(info, 1);  // 释放资源
+          new_pos = size + offset;
+      }
+      break;
+    }
+    default:
+      VLOG(1) << "invalid value, offset = " << offset
+              << ", seek_from = " << seek_from;
+      return;
+  }
+  
+  if (hdfsSeek(hdfs_conn_, hdfs_file_, new_pos) != 0) {
+    LOG(ERROR) << "Failed to seek to offset: " << new_pos 
+               << ", whence: " << seek_from;
+  }
+}
+
+// HDFS 专用 Open 实现
+void LocalIOAdaptor::hdfsOpen1(const char* mode) {
+  int hdfs_mode;
+  if (strchr(mode, 'r')) {
+    hdfs_mode = O_RDONLY;
+  } else if (strchr(mode, 'w')) {
+    hdfs_mode = O_WRONLY | O_CREAT | O_TRUNC;
+  } else if (strchr(mode, 'a')) {
+    hdfs_mode = O_WRONLY | O_CREAT | O_APPEND;
+  } else {
+    LOG(FATAL) << "Unsupported HDFS open mode: " << mode;
+  }
+  hdfs_file_ = hdfsOpenFile(hdfs_conn_, hdfs_file_path_.c_str(), hdfs_mode, 0, 0, 0);
+  if (!hdfs_file_) {
+    LOG(FATAL) << "Failed to open HDFS file: " << location_;
+  }
+}
+
+// HDFS 专用 ReadLine 实现
+bool LocalIOAdaptor::hdfsReadLine1(std::string& line) {
+  //std::cout << "LocalIOAdaptor::ReadLine " << line << std::endl;
+  line.clear();
+  // 首次调用时初始化缓冲区
+  if (buffer_size_ == 0 && buffer_pos_ == 0) {
+    if (!hdfsFillBuffer()) {
+        return false;  // 文件为空或读取失败
+    }
+  }
+  // 从缓冲区读取数据
+
+    // 查找换行符
+    char* newline_pos = static_cast<char*>(memchr(
+        buffer_.data() + buffer_pos_, 
+        '\n', 
+        buffer_size_ - buffer_pos_
+    ));
+    
+    if (newline_pos != nullptr) {
+        // 找到换行符，提取一行
+        size_t line_length = newline_pos - (buffer_.data() + buffer_pos_) + 1;
+        line.append(buffer_.data() + buffer_pos_, line_length);
+        buffer_pos_ += line_length;
+        return true;
+    }
+    
+    // 缓冲区中没有完整的行
+    if (buffer_pos_ < buffer_size_) {
+        // 保存剩余内容到 line
+        line.append(buffer_.data() + buffer_pos_, buffer_size_ - buffer_pos_);
+        buffer_size_ = 0;
+        buffer_pos_ = 0;
+    }
+
+    
+    // 读取更多数据
+    if (!hdfsFillBuffer()) {
+        // 没有更多数据，返回已读取的内容（可能为空行）
+        return !line.empty();
+    } else {
+      // 检查新读取的数据中是否有换行符
+      newline_pos = static_cast<char*>(memchr(
+          buffer_.data(), 
+          '\n', 
+          buffer_size_
+      ));
+      
+      if (newline_pos != nullptr) {
+          // 找到换行符，提取剩余行内容
+          size_t line_length = newline_pos - buffer_.data() + 1;
+          line.append(buffer_.data(), line_length);
+          buffer_pos_ += line_length;
+          return true;
+      }
+    }
+    return false;
+}
+
+// HDFS填充缓冲区
+bool LocalIOAdaptor::hdfsFillBuffer() {
+  // 确保缓冲区已分配足够空间
+  if (buffer_.size() < HDFS_LINE_SIZE) {
+    buffer_.resize(HDFS_LINE_SIZE);
+  }
+  int64_t bytes_to_read = HDFS_LINE_SIZE;
+  int64_t total_bytes_read = 0;
+  
+  // 如果启用了分区读取，计算本次最多能读取的字节数，确保不超出分区边界
+  if (enable_partial_read_) {
+      int64_t current_pos = tell();
+      int64_t bytes_remaining = partial_read_offset_[index_ + 1] - current_pos;
+      if (bytes_remaining < bytes_to_read) {
+          bytes_to_read = bytes_remaining;
+      }
+  }
+  if (bytes_to_read <= 0) {
+      return false;
+  }
+  
+  // 循环读取数据，直到填满缓冲区或达到分区边界,有时候一次读取不会成功，所以需要循环读取（太坑）
+  while (total_bytes_read < bytes_to_read) {
+    tSize bytesRead = hdfsRead(
+        hdfs_conn_, 
+        hdfs_file_, 
+        buffer_.data() + total_bytes_read,  // 写入位置偏移
+        bytes_to_read - total_bytes_read  // 剩余需要读取的字节数
+    );
+    
+    if (bytesRead <= 0) {
+        break;  // 读取失败或已到达文件末尾
+    }
+    
+    total_bytes_read += bytesRead;
+  } 
+  
+  if (total_bytes_read > 0) {
+    buffer_size_ = total_bytes_read;
+    buffer_pos_ = 0;
+    return true;
+  }
+
+  return false;
+}
+
+// HDFS 专用 Read 实现
+bool LocalIOAdaptor::hdfsRead1(void* buffer, size_t size) {
+  tSize bytesRead = hdfsRead(hdfs_conn_, hdfs_file_, buffer, size);
+  if(bytesRead < 0) {
+    LOG(ERROR) << "Failed to read from HDFS file: " << location_;
+    return false;
+  }
+  return true;
+}
+
+// HDFS 专用 Close 实现
+bool LocalIOAdaptor::hdfsClose1() {
+  if (hdfs_file_) {
+    hdfsCloseFile(hdfs_conn_, hdfs_file_);
+    hdfs_file_ = nullptr;
+    return true;
+  }
+  return false;
+}
+
+#endif
 }  // namespace grape

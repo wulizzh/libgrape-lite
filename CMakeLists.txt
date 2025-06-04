@@ -12,7 +12,8 @@ set(LIBGRAPELITE_VERSION ${LIBGRAPELITE_MAJOR_VERSION}.${LIBGRAPELITE_MINOR_VERS
 # ------------------------------------------------------------------------------
 
 option(WITH_TEE "Enable support for OP-TEE" OFF)
-
+# 添加Hadoop和JNI支持选项
+option(WITH_HADOOPJNI "Enable Hadoop and JNI support" ON)
 option(USE_JEMALLOC "Whether to use jemalloc." OFF)
 option(USE_HUGEPAGES "Whether to use hugepages." OFF)
 option(BUILD_SHARED_LIBS "Whether to build libgrape-lite as shared library" ON)
@@ -224,6 +225,15 @@ if (NOT RDKAFKA_FOUND)
   message(STATUS "rdkafka not found, build without rdkafka")
 endif ()
 
+
+# find Hadoop and JNI-----------------------------------------------------------
+if (WITH_HADOOPJNI)
+  include("cmake/FindHadoop.cmake")
+else()
+  message(STATUS "Hadoop/JNI support disabled")
+endif ()
+
+
 # install, and export
 macro(install_libgrapelite_target target)
   install(TARGETS ${target}
@@ -250,18 +260,24 @@ endmacro()
 file(GLOB_RECURSE CORE_SRC_FILES "grape/*.cc")
 add_library(grape-lite ${CORE_SRC_FILES})
 install_libgrapelite_target(grape-lite)
-target_include_directories(grape-lite PUBLIC
-                             $ENV{HADOOP_HOME}/include
-                             $ENV{JAVA_HOME}/include
-                             $ENV{JAVA_HOME}/include/linux)
-# 设置库目录（等价于 -L 参数）
-target_link_directories(grape-lite PUBLIC
-                        $ENV{HADOOP_HOME}/lib/native
-                        $ENV{JAVA_HOME}/jre/lib/amd64/server
-                        )
+
+if(HADOOPJNI_FOUND)
+    # 添加头文件目录
+    target_include_directories(grape-lite PUBLIC
+        $ENV{HADOOP_HOME}/include
+        $ENV{JAVA_HOME}/include
+        $ENV{JAVA_HOME}/include/linux
+    )
+    # 链接库文件
+    target_link_libraries(grape-lite PUBLIC ${HADOOPJNI_LIBRARIES})
+    add_definitions(-DWITH_HDFS) # 定义宏以启用HDFS支持
+    message(STATUS "Hadoop/JNI support enabled")
+else()
+    message(STATUS "Failed to find libhdfs.so or libjvm.so, disabling support")
+    set(WITH_HADOOPJNI OFF)
+endif()
+
 target_link_libraries(grape-lite PUBLIC
-                      $ENV{HADOOP_HOME}/lib/native/libhdfs.so
-                      $ENV{JAVA_HOME}/jre/lib/amd64/server/libjvm.so
                       ${MPI_CXX_LIBRARIES}
                       ${CMAKE_THREAD_LIBS_INIT}
                       ${GLOG_LIBRARIES}

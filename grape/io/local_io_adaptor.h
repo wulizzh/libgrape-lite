@@ -21,7 +21,9 @@ limitations under the License.
 #include <fstream>
 #include <string>
 #include <vector>
+#ifdef WITH_HDFS
 #include <hdfs.h>
+#endif
 
 #include "grape/io/io_adaptor_base.h"
 
@@ -66,17 +68,22 @@ class LocalIOAdaptor : public IOAdaptorBase {
  private:
   enum IOType { LOCAL, HDFS };  // 新增 IO 类型判断
   static constexpr size_t LINE_SIZE = 65535;
-
+  static constexpr size_t HDFS_LINE_SIZE = 134217728;
   enum FileLocation {
     kFileLocationBegin = 0,
     kFileLocationCurrent = 1,
     kFileLocationEnd = 2,
   };
 
+  int64_t tell();
+  void seek(int64_t offset, FileLocation seek_from);
+  bool setPartialReadImpl();
+
   // HDFS 专用辅助函数
   void hdfsOpen1(const char* mode);
   bool hdfsClose1();
   bool hdfsReadLine1(std::string& line);
+  int64_t hdfsTell1();
   //bool hdfsReadArchive1(OutArchive& archive);
   //bool hdfsWriteArchive1(InArchive& archive);
   bool hdfsRead1(void* buffer, size_t size);
@@ -85,10 +92,6 @@ class LocalIOAdaptor : public IOAdaptorBase {
   // bool hdfsWrite1(void* buffer, size_t size);
   // bool hdfsMakeDirectory1(const std::string& path);
   // bool hdfsIsExist1();
-
-  int64_t tell();
-  void seek(int64_t offset, FileLocation seek_from);
-  bool setPartialReadImpl();
 
   FILE* file_;
   std::fstream fs_;
@@ -100,14 +103,17 @@ class LocalIOAdaptor : public IOAdaptorBase {
   std::vector<int64_t> partial_read_offset_;
   int total_parts_;
   int index_;
+  IOType io_type_ = LOCAL;           // 当前 IO 类型
+
+  #ifdef WITH_HDFS
   // HDFS 专用成员
   hdfsFS hdfs_conn_ = nullptr;       // HDFS 连接句柄
   hdfsFile hdfs_file_ = nullptr;     // HDFS 文件句柄
-  IOType io_type_ = LOCAL;           // 当前 IO 类型
   std::string hdfs_file_path_;  // HDFS 文件路径
-  char buffer_[LINE_SIZE];
+  std::vector<char> buffer_;
   size_t buffer_size_ = 0;
   size_t buffer_pos_ = 0;
+  #endif
 };
 }  // namespace grape
 
