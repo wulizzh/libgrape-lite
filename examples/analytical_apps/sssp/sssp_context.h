@@ -19,13 +19,14 @@ limitations under the License.
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <chrono>
 
-#include <grape/grape.h>
-
-#include "grape/utils/thread_safe_mapper.h"
 #ifdef WITH_TEE
 #include "TEE/connection_pool.h"
 #endif
+
+#include <grape/grape.h>
+#include <grape/utils/thread_safe_mapper.h>
 
 namespace grape {
 
@@ -42,16 +43,12 @@ class SSSPContext : public VertexDataContext<FRAG_T, double> {
 
   explicit SSSPContext(const FRAG_T& fragment)
       : VertexDataContext<FRAG_T, double>(fragment, true),
-        partial_result(this->data()) {}
-
-  ~SSSPContext() {
+        partial_result(this->data())
 #ifdef WITH_TEE
-    if (connection_pool) {
-      delete connection_pool;
-      connection_pool = nullptr;
-    }
+        , connection_pool(1)
 #endif
-  }
+      {}
+        
 
   void Init(ParallelMessageManager& messages, oid_t source_id) {
     auto& frag = this->fragment();
@@ -60,10 +57,6 @@ class SSSPContext : public VertexDataContext<FRAG_T, double> {
     partial_result.SetValue(std::numeric_limits<double>::max());
     curr_modified.Init(frag.Vertices());
     next_modified.Init(frag.Vertices());
-
-#ifdef WITH_TEE
-    connection_pool = new ConnectionPool(6);
-#endif
 
 #ifdef PROFILING
     preprocess_time = 0;
@@ -78,6 +71,7 @@ class SSSPContext : public VertexDataContext<FRAG_T, double> {
     // According to specs, the output should be +inf
     auto& frag = this->fragment();
     auto inner_vertices = frag.InnerVertices();
+    std::cout << "private_count " << private_count << std::endl;
     for (auto v : inner_vertices) {
       double d = partial_result[v];
       if (d == std::numeric_limits<double>::max()) {
@@ -87,6 +81,7 @@ class SSSPContext : public VertexDataContext<FRAG_T, double> {
            << d << std::endl;
       }
     }
+    ostream.close();
 #ifdef PROFILING
     VLOG(2) << "preprocess_time: " << preprocess_time << "s.";
     VLOG(2) << "exec_time: " << exec_time << "s.";
@@ -98,16 +93,20 @@ class SSSPContext : public VertexDataContext<FRAG_T, double> {
   typename FRAG_T::template vertex_array_t<double>& partial_result;
 
   DenseVertexSet<typename FRAG_T::vertices_t> curr_modified, next_modified;
+  ThreadSafeMapper<oid_t, double> private_potential_result;
+
+  long int private_count = 0;
+  int private_count_iter = 0;
+  std::ofstream ostream;
+#ifdef WITH_TEE
+  ConnectionPool connection_pool;
+#endif
+  
 
 #ifdef PROFILING
   double preprocess_time = 0;
   double exec_time = 0;
   double postprocess_time = 0;
-#endif
-
-  ThreadSafeMapper<int, double> private_potential_result;
-#ifdef WITH_TEE
-  ConnectionPool* connection_pool;
 #endif
 };
 }  // namespace grape

@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"path": "../../libgrape-lite-heterogeneous-grape/libgrape-lite-heterogeneous-grape"
+		}
+	],
+	"settings": {}
+}

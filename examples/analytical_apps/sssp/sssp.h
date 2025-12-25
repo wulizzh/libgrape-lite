@@ -18,7 +18,12 @@ limitations under the License.
 
 #include <grape/grape.h>
 
+#ifdef WITH_TEE
+#include "TEE/connection_pool.h"
+#endif
+
 #include "sssp/sssp_context.h"
+
 
 namespace grape {
 
@@ -36,61 +41,25 @@ namespace grape {
 template <typename FRAG_T>
 class SSSP : public ParallelAppBase<FRAG_T, SSSPContext<FRAG_T>>,
              public ParallelEngine {
+
  public:
   // specialize the templated worker.
   INSTALL_PARALLEL_WORKER(SSSP<FRAG_T>, SSSPContext<FRAG_T>, FRAG_T)
   using vertex_t = typename fragment_t::vertex_t;
 
-  void WaitTEE(const fragment_t& frag, context_t& ctx) {
-#ifdef WITH_TEE
-    fid_t fid = frag.fid();
-    if (fid < 6) return;
-    MPI_Barrier(MPI_COMM_WORLD);
-#endif
-  }
-
-  void processPrivate(const fragment_t& frag, context_t& ctx,
-                      message_manager_t& messages) {
-    if (ctx.private_potential_result.size() == 0) {
-      return;
-    }
-
-    auto data_map = ctx.private_potential_result.steal_all();
-
-#ifdef WITH_TEE
-    auto conn = ctx.connection_pool->acquire();
-    // TEE processing logic would go here
-    // For now, we process private nodes with standard relaxation
-#endif
-
-    for (auto& pair : data_map) {
-      vertex_t v(pair.first);
-      double dist = pair.second;
-
-      auto es = frag.GetOutgoingAdjList(v);
-      for (auto& e : es) {
-        vertex_t u = e.get_neighbor();
-        double ndistu = dist + e.get_data();
-
-        if (frag.GetSecret(u)) {
-          ctx.private_potential_result.insert_or_update_min(u.GetValue(), ndistu);
-        } else {
-          if (ndistu < ctx.partial_result[u]) {
-            atomic_min(ctx.partial_result[u], ndistu);
-            ctx.next_modified.Insert(u);
-          }
-        }
-      }
-    }
-
-#ifdef WITH_TEE
-    ctx.connection_pool->release(conn);
-#endif
-  }
-
+  /**
+   * @brief Partial evaluation for SSSP.
+   *
+   * @param frag
+   * @param ctx
+   * @param messages
+   */
   void PEval(const fragment_t& frag, context_t& ctx,
              message_manager_t& messages) {
+    ctx.ostream.open("log" + std::to_string(frag.fid()) + ".txt");
     messages.InitChannels(thread_num());
+
+    auto start = std::chrono::steady_clock::now();
 
     vertex_t source;
     bool native_source = frag.GetInnerVertex(ctx.source_id, source);
@@ -103,31 +72,39 @@ class SSSP : public ParallelAppBase<FRAG_T, SSSPContext<FRAG_T>>,
 
     // Get the channel. Messages assigned to this channel will be sent by the
     // message manager in parallel with the evaluation process.
-    auto& channel_0 = messages.Channels()[0];
-
+    // auto& channel_0 = messages.Channels()[0];
     if (native_source) {
-      if (frag.GetSecret(source)) {
-        ctx.private_potential_result.insert_or_update(source.GetValue(), 0);
-      } else {
-        ctx.partial_result[source] = 0;
-        auto es = frag.GetOutgoingAdjList(source);
-        for (auto& e : es) {
-          vertex_t v = e.get_neighbor();
-          double new_dist = e.get_data();
-          if (frag.GetSecret(v)) {
-              ctx.private_potential_result.insert_or_update_min(v.GetValue(), new_dist);
-          } else {
-              ctx.partial_result[v] = std::min(ctx.partial_result[v], new_dist);
-              if (frag.IsOuterVertex(v)) {
-                channel_0.SyncStateOnOuterVertex<fragment_t, double>(
-                    frag, v, ctx.partial_result[v]);
-              } else {
-                ctx.next_modified.Insert(v);
-              }
-          }
+      // ctx.ostream << "v" << frag.GetId(source) << ": " << frag.GetData(source) << " p" << frag.GetSecret(source) << std::endl;
+      // if (frag.GetSecret(source)) {
+      //   ++ctx.private_count;
+      //   ctx.ostream << 1 << std::endl;
+      // }else {
+      //   ctx.ostream << 0 << std::endl;
+      // }
+
+      ctx.partial_result[source] = 0;
+      auto es = frag.GetOutgoingAdjList(source);
+      for (auto& e : es) {
+        vertex_t v = e.get_neighbor();
+        // ctx.ostream << "out v" << frag.GetId(v) << ": " << ctx.partial_result[v] << std::endl;
+        if(frag.GetSecret(v)) {
+          ctx.private_potential_result.insert_or_update_min(frag.GetId(v), static_cast<double>(e.get_data()));
+        }else {
+          ctx.partial_result[v] = std::min(ctx.partial_result[v], static_cast<double>(e.get_data()));
+          ctx.next_modified.Insert(v);
         }
+
       }
+      #ifdef WITH_TEE
+      processPrivate(frag, ctx, messages);
+      #endif
     }
+    auto outer_vertices = frag.OuterVertices();
+    ForEach(ctx.next_modified, outer_vertices,
+            [&messages, &frag, &ctx](int tid, vertex_t v) {
+              messages.Channels()[tid].SyncStateOnOuterVertex<fragment_t, double>(
+                  frag, v, ctx.partial_result[v]);
+            });
 
 #ifdef PROFILING
     ctx.exec_time += GetCurrentTime();
@@ -137,6 +114,10 @@ class SSSP : public ParallelAppBase<FRAG_T, SSSPContext<FRAG_T>>,
     messages.ForceContinue();
 
     ctx.next_modified.Swap(ctx.curr_modified);
+
+    //timmer
+    auto end = std::chrono::steady_clock::now();
+    ctx.ostream << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << std::endl;
 #ifdef PROFILING
     ctx.postprocess_time += GetCurrentTime();
 #endif
@@ -151,6 +132,9 @@ class SSSP : public ParallelAppBase<FRAG_T, SSSPContext<FRAG_T>>,
    */
   void IncEval(const fragment_t& frag, context_t& ctx,
                message_manager_t& messages) {
+    // ctx.ostream << "==================== IncEval ====================" << std::endl;
+    auto start = std::chrono::steady_clock::now();
+
     auto inner_vertices = frag.InnerVertices();
 
     auto& channels = messages.Channels();
@@ -161,19 +145,12 @@ class SSSP : public ParallelAppBase<FRAG_T, SSSPContext<FRAG_T>>,
 
     ctx.next_modified.ParallelClear(GetThreadPool());
 
-    // Proecss private data first
-    processPrivate(frag, ctx, messages);
-
     // parallel process and reduce the received messages
     messages.ParallelProcess<fragment_t, double>(
-        thread_num(), frag, [&ctx, &frag](int tid, vertex_t u, double msg) {
-          if (frag.GetSecret(u)) {
-             ctx.private_potential_result.insert_or_update_min(u.GetValue(), msg);
-          } else {
-             if (ctx.partial_result[u] > msg) {
-               atomic_min(ctx.partial_result[u], msg);
-               ctx.curr_modified.Insert(u);
-             }
+        thread_num(), frag, [&ctx](int tid, vertex_t u, double msg) {
+          if (ctx.partial_result[u] > msg) {
+            atomic_min(ctx.partial_result[u], msg);
+            ctx.curr_modified.Insert(u);
           }
         });
 
@@ -183,24 +160,33 @@ class SSSP : public ParallelAppBase<FRAG_T, SSSPContext<FRAG_T>>,
 #endif
 
     // incremental evaluation.
+    ctx.private_count_iter = 0;
     ForEach(ctx.curr_modified, inner_vertices,
             [&frag, &ctx](int tid, vertex_t v) {
               double distv = ctx.partial_result[v];
+              if (frag.GetSecret(v)) {
+                ++ctx.private_count;
+                ++ctx.private_count_iter;
+              }
               auto es = frag.GetOutgoingAdjList(v);
               for (auto& e : es) {
                 vertex_t u = e.get_neighbor();
                 double ndistu = distv + e.get_data();
-                if (frag.GetSecret(u)) {
-                   ctx.private_potential_result.insert_or_update_min(u.GetValue(), ndistu);
+                if (frag.GetSecret(u)){
+                  ctx.private_potential_result.insert_or_update_min(frag.GetId(u), ndistu);
                 } else {
-                   if (ndistu < ctx.partial_result[u]) {
-                     atomic_min(ctx.partial_result[u], ndistu);
-                     ctx.next_modified.Insert(u);
-                   }
+                  if (ndistu < ctx.partial_result[u]) {
+                    atomic_min(ctx.partial_result[u], ndistu);
+                    ctx.next_modified.Insert(u);
+                  }
                 }
               }
             });
+    #ifdef WITH_TEE
+    processPrivate(frag, ctx, messages);
+    #endif  
 
+    // ctx.ostream << ctx.private_count_iter << std::endl;
     // put messages into channels corresponding to the destination fragments.
 
 #ifdef PROFILING
@@ -213,6 +199,9 @@ class SSSP : public ParallelAppBase<FRAG_T, SSSPContext<FRAG_T>>,
               channels[tid].SyncStateOnOuterVertex<fragment_t, double>(
                   frag, v, ctx.partial_result[v]);
             });
+    //timmer
+    auto end = std::chrono::steady_clock::now();
+    ctx.ostream << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << std::endl;
 
     if (!ctx.next_modified.PartialEmpty(
             frag.Vertices().begin_value(),
@@ -221,11 +210,71 @@ class SSSP : public ParallelAppBase<FRAG_T, SSSPContext<FRAG_T>>,
     }
 
     ctx.next_modified.Swap(ctx.curr_modified);
+
+
 #ifdef PROFILING
     ctx.postprocess_time += GetCurrentTime();
 #endif
-    WaitTEE(frag, ctx);
   }
+#ifdef WITH_TEE 
+private:
+    void processPrivate(const fragment_t& frag, context_t& ctx,
+                    message_manager_t& messages) {
+    //std::cout << "开开开开开" << std::endl;
+    // 从连接池中获取一个可用连接（共享内存 + TEE 通道）
+    auto conn = ctx.connection_pool.acquire();
+
+    // 重置共享内存，清零或准备状态
+    conn->resetSharedMemory();
+
+    // 获取当前和目标 buffer（void*）以及它们的总字节大小
+    size_t buffer_bytes = 0;
+    double* current = static_cast<double*>(conn->sssp_get_current_buffer(buffer_bytes));
+    double* target = static_cast<double*>(conn->sssp_get_target_buffer(buffer_bytes));
+
+    // 将字节数转换为最多可容纳多少个 double 元素
+    size_t buffer_capacity = buffer_bytes / sizeof(double);
+
+    // 遍历所有待处理的私有节点（这些节点是 potential 的候选人）
+    auto keys = ctx.private_potential_result.keys();
+    size_t total_keys = keys.size();
+    //这里是记录隐私节点个数？那么他怎么和上面的容量比较呢？current和target存的是距离？是double还是int？
+    // 分批处理每一段，不超过共享内存 buffer_capacity
+    for (size_t offset = 0; offset < total_keys; offset += buffer_capacity) {
+        size_t batch_size = std::min(buffer_capacity, total_keys - offset);
+
+        // 写入 current / target buffer，准备进行 TEE 比较
+        for (size_t i = 0; i < batch_size; ++i) {
+            auto vid = keys[offset + i];
+            vertex_t v;
+            frag.GetVertex(vid, v);
+
+            current[i] = ctx.partial_result[v];
+            target[i] = ctx.private_potential_result.get(vid).value();
+        }
+
+        // 调用 TEE 中的比较逻辑：结果将反映在 target[i] 中（是否更优）
+        conn->sssp_compare();
+
+        // 根据比较结果更新当前 fragment 的结果，并标记 modified
+        for (size_t i = 0; i < batch_size; ++i) {
+            auto vid = keys[offset + i];
+            vertex_t v;
+            frag.GetVertex(vid, v);
+
+            // 注意这里 target[i] > 0 表示 TEE 认为当前值更优
+            if (target[i] > 0) {
+                ctx.partial_result[v] = current[i];
+                ctx.next_modified.Insert(v);
+            }
+        }
+    }
+
+    // 清空待处理隐私节点缓存，释放连接资源
+    ctx.private_potential_result.clear();
+    ctx.connection_pool.release(conn);
+}
+#endif
 };
 
 }  // namespace grape
