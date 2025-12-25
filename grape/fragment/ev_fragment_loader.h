@@ -23,10 +23,8 @@ limitations under the License.
 #include <utility>
 #include <vector>
 
-#include "grape/fragment/basic_efile_fragment_loader.h"
 #include "grape/fragment/basic_fragment_loader.h"
-#include "grape/fragment/basic_local_fragment_loader.h"
-#include "grape/fragment/basic_rb_fragment_loader.h"
+#include "grape/fragment/partitioner.h"
 #include "grape/io/line_parser_base.h"
 #include "grape/io/local_io_adaptor.h"
 #include "grape/io/tsv_line_parser.h"
@@ -53,6 +51,8 @@ class EVFragmentLoader {
   using vdata_t = typename fragment_t::vdata_t;
   using edata_t = typename fragment_t::edata_t;
 
+  using vertex_map_t = typename fragment_t::vertex_map_t;
+  using partitioner_t = typename vertex_map_t::partitioner_t;
   using io_adaptor_t = IOADAPTOR_T;
   using line_parser_t = LINE_PARSER_T;
 
@@ -64,7 +64,7 @@ class EVFragmentLoader {
 
  public:
   explicit EVFragmentLoader(const CommSpec& comm_spec)
-      : comm_spec_(comm_spec), basic_fragment_loader_(nullptr) {}
+      : comm_spec_(comm_spec), basic_fragment_loader_(comm_spec) {}
 
   ~EVFragmentLoader() = default;
 
@@ -72,9 +72,10 @@ class EVFragmentLoader {
                                            const std::string& vfile,
                                            const LoadGraphSpec& spec) {
     std::shared_ptr<fragment_t> fragment(nullptr);
-    if (spec.deserialize) {
-      bool deserialized = DeserializeFragment<fragment_t, IOADAPTOR_T>(
-          fragment, comm_spec_, efile, vfile, spec);
+    CHECK(!spec.rebalance);
+    if (spec.deserialize && (!spec.serialize)) {
+      bool deserialized = basic_fragment_loader_.DeserializeFragment(
+          fragment, spec.deserialization_prefix);
       int flag = 0;
       int sum = 0;
       if (!deserialized) {
@@ -92,43 +93,17 @@ class EVFragmentLoader {
       }
     }
 
-    if (vfile.empty()) {
-      basic_fragment_loader_ =
-          std::unique_ptr<BasicEFileFragmentLoader<fragment_t>>(
-              new BasicEFileFragmentLoader<fragment_t>(comm_spec_, spec));
-    } else {
-      if (spec.idxer_type != IdxerType::kLocalIdxer) {
-        if (spec.rebalance) {
-          basic_fragment_loader_ =
-              std::unique_ptr<BasicRbFragmentLoader<fragment_t>>(
-                  new BasicRbFragmentLoader<fragment_t>(comm_spec_, spec));
-        } else {
-          basic_fragment_loader_ =
-              std::unique_ptr<BasicFragmentLoader<fragment_t>>(
-                  new BasicFragmentLoader<fragment_t>(comm_spec_, spec));
-        }
-      } else {
-        basic_fragment_loader_ =
-            std::unique_ptr<BasicLocalFragmentLoader<fragment_t>>(
-                new BasicLocalFragmentLoader<fragment_t>(comm_spec_, spec));
-      }
-    }
-
+    std::vector<oid_t> id_list;
+    std::vector<vdata_t> vdata_list;
+    std::vector<int32_t> vprivacy_list;
     if (!vfile.empty()) {
-      MPI_Barrier(comm_spec_.comm());
-      double t0 = -grape::GetCurrentTime();
-
       auto io_adaptor = std::unique_ptr<IOADAPTOR_T>(new IOADAPTOR_T(vfile));
-      // NOTE: Do NOT use SetPartialRead for vfile.
-      // All Workers must read the complete vertex file to ensure consistent
-      // privacy_counter for round-robin distribution of private vertices.
       io_adaptor->Open();
       std::string line;
       vdata_t v_data;
+      int32_t v_privacy;
       oid_t vertex_id;
-      int32_t v_privacy = 0;
       size_t line_no = 0;
-      int privacy_counter = 0;  // Counter for round-robin distribution of private vertices
       while (io_adaptor->ReadLine(line)) {
         ++line_no;
         if (line_no % 1000000 == 0) {
@@ -143,38 +118,39 @@ class EVFragmentLoader {
           VLOG(1) << e.what();
           continue;
         }
-
-        // For private vertices, store partition override hint using round-robin
-        if (v_privacy == 1) {
-          fid_t fid = privacy_counter % 6;
-          basic_fragment_loader_->StoreOverride(vertex_id, fid);
-          ++privacy_counter;
-        }
-
-        // Add ALL vertices (both private and non-private)
-        basic_fragment_loader_->AddVertex(vertex_id, v_data, v_privacy);
+        id_list.push_back(vertex_id);
+        vdata_list.push_back(v_data);
+        vprivacy_list.push_back(v_privacy);
       }
       io_adaptor->Close();
-
-      MPI_Barrier(comm_spec_.comm());
-      t0 += grape::GetCurrentTime();
-      if (comm_spec_.worker_id() == 0) {
-        VLOG(1) << "finished reading vertices inputs, time: " << t0 << " s";
-      }
-
-      double t1 = -grape::GetCurrentTime();
-      basic_fragment_loader_->ConstructVertices();
-
-      MPI_Barrier(comm_spec_.comm());
-      t1 += grape::GetCurrentTime();
-      if (comm_spec_.worker_id() == 0) {
-        VLOG(1) << "finished constructing vertices, time: " << t1 << " s";
-      }
-    } else {
-      basic_fragment_loader_->ConstructVertices();
     }
 
-    double t2 = -grape::GetCurrentTime();
+//    partitioner_t partitioner(comm_spec_.fnum(), id_list);
+    int privacy_counter = 0;
+    SegmentedPartitioner<oid_t> partitioner(comm_spec_.fnum(), id_list);
+//HashPartitioner<oid_t> partitioner(comm_spec_.fnum());
+// ✅ 设置隐私点归到分片 0，其余使用默认规则（范围划分）
+for (size_t i = 0; i < id_list.size(); ++i) {
+  if (vprivacy_list[i] == 1) {
+   // partitioner.SetPartitionId(id_list[i], 0);
+       fid_t fid = privacy_counter % 6;
+    partitioner.SetPartitionId(id_list[i], fid);
+    ++privacy_counter;
+  }
+}
+
+
+    basic_fragment_loader_.SetPartitioner(std::move(partitioner));
+
+    basic_fragment_loader_.Start();
+
+    {
+      size_t vnum = id_list.size();
+      for (size_t i = 0; i < vnum; ++i) {
+        basic_fragment_loader_.AddVertex(id_list[i], vdata_list[i], vprivacy_list[i]);
+      }
+    }
+
     {
       auto io_adaptor =
           std::unique_ptr<IOADAPTOR_T>(new IOADAPTOR_T(std::string(efile)));
@@ -183,6 +159,7 @@ class EVFragmentLoader {
       io_adaptor->Open();
       std::string line;
       edata_t e_data;
+      int32_t e_privacy;
       oid_t src, dst;
 
       size_t lineNo = 0;
@@ -195,36 +172,26 @@ class EVFragmentLoader {
         if (line.empty() || line[0] == '#')
           continue;
 
-        int32_t e_privacy;
         try {
-          line_parser_.LineParserForEFile(line, src, dst, e_data, e_privacy);
+          line_parser_.LineParserForEFile(line, src, dst, e_data);
         } catch (std::exception& e) {
           VLOG(1) << e.what();
           continue;
         }
 
-        basic_fragment_loader_->AddEdge(src, dst, e_data, e_privacy);
+        basic_fragment_loader_.AddEdge(src, dst, e_data, e_privacy);
       }
       io_adaptor->Close();
     }
-    MPI_Barrier(comm_spec_.comm());
-    t2 += grape::GetCurrentTime();
-    if (comm_spec_.worker_id() == 0) {
-      VLOG(1) << "finished reading edges inputs, time: " << t2 << " s";
-    }
 
-    double t3 = -grape::GetCurrentTime();
-    basic_fragment_loader_->ConstructFragment(fragment);
-    MPI_Barrier(comm_spec_.comm());
-    t3 += grape::GetCurrentTime();
+    VLOG(1) << "[worker-" << comm_spec_.worker_id()
+            << "] finished add vertices and edges";
 
-    if (comm_spec_.worker_id() == 0) {
-      VLOG(1) << "finished constructing fragment, time: " << t3 << " s";
-    }
+    basic_fragment_loader_.ConstructFragment(fragment, spec.directed);
 
     if (spec.serialize) {
-      bool serialized = SerializeFragment<fragment_t, IOADAPTOR_T>(
-          fragment, comm_spec_, efile, vfile, spec);
+      bool serialized = basic_fragment_loader_.SerializeFragment(
+          fragment, spec.serialization_prefix);
       if (!serialized) {
         VLOG(2) << "[worker-" << comm_spec_.worker_id()
                 << "] Serialization failed.";
@@ -237,7 +204,7 @@ class EVFragmentLoader {
  private:
   CommSpec comm_spec_;
 
-  std::unique_ptr<BasicFragmentLoaderBase<fragment_t>> basic_fragment_loader_;
+  BasicFragmentLoader<fragment_t, io_adaptor_t> basic_fragment_loader_;
   line_parser_t line_parser_;
 };
 

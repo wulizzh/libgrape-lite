@@ -42,13 +42,15 @@ limitations under the License.
 #include "grape/types.h"
 #include "grape/util.h"
 #include "grape/utils/vertex_array.h"
+#include "grape/vertex_map/global_vertex_map.h"
 #include "grape/worker/comm_spec.h"
 
 namespace grape {
 class CommSpec;
 class OutArchive;
 
-template <typename OID_T, typename VID_T, typename VDATA_T, typename EDATA_T>
+template <typename OID_T, typename VID_T, typename VDATA_T, typename EDATA_T,
+          typename VERTEX_MAP_T>
 struct ImmutableEdgecutFragmentTraits {
   using inner_vertices_t = VertexRange<VID_T>;
   using outer_vertices_t = VertexRange<VID_T>;
@@ -59,8 +61,9 @@ struct ImmutableEdgecutFragmentTraits {
   using fragment_const_adj_list_t = ConstAdjList<VID_T, EDATA_T>;
 
   using csr_t = ImmutableCSR<VID_T, Nbr<VID_T, EDATA_T>>;
-  using csr_builder_t = ImmutableCSRParallelBuilder<VID_T, Nbr<VID_T, EDATA_T>>;
+  using csr_builder_t = ImmutableCSRBuild<VID_T, Nbr<VID_T, EDATA_T>>;
   using mirror_vertices_t = std::vector<Vertex<VID_T>>;
+  using vertex_map_t = VERTEX_MAP_T;
 };
 
 /**
@@ -111,14 +114,16 @@ struct ImmutableEdgecutFragmentTraits {
  *
  */
 template <typename OID_T, typename VID_T, typename VDATA_T, typename EDATA_T,
-          LoadStrategy _load_strategy = LoadStrategy::kOnlyOut>
+          LoadStrategy _load_strategy = LoadStrategy::kOnlyOut,
+          typename VERTEX_MAP_T = GlobalVertexMap<OID_T, VID_T>>
 class ImmutableEdgecutFragment
     : public CSREdgecutFragmentBase<
           OID_T, VID_T, VDATA_T, EDATA_T,
-          ImmutableEdgecutFragmentTraits<OID_T, VID_T, VDATA_T, EDATA_T>> {
+          ImmutableEdgecutFragmentTraits<OID_T, VID_T, VDATA_T, EDATA_T,
+                                         VERTEX_MAP_T>> {
  public:
-  using traits_t =
-      ImmutableEdgecutFragmentTraits<OID_T, VID_T, VDATA_T, EDATA_T>;
+  using traits_t = ImmutableEdgecutFragmentTraits<OID_T, VID_T, VDATA_T,
+                                                  EDATA_T, VERTEX_MAP_T>;
   using base_t =
       CSREdgecutFragmentBase<OID_T, VID_T, VDATA_T, EDATA_T, traits_t>;
   using internal_vertex_t = internal::Vertex<VID_T, VDATA_T>;
@@ -129,6 +134,7 @@ class ImmutableEdgecutFragment
   using oid_t = OID_T;
   using vdata_t = VDATA_T;
   using edata_t = EDATA_T;
+  using vertex_map_t = typename traits_t::vertex_map_t;
 
   using IsEdgeCut = std::true_type;
   using IsVertexCut = std::false_type;
@@ -149,7 +155,10 @@ class ImmutableEdgecutFragment
   template <typename T>
   using vertex_array_t = VertexArray<vertices_t, T>;
 
-  ImmutableEdgecutFragment() : FragmentBase<OID_T, VDATA_T, EDATA_T>() {}
+  ImmutableEdgecutFragment() {}
+
+  explicit ImmutableEdgecutFragment(std::shared_ptr<vertex_map_t> vm_ptr)
+      : FragmentBase<OID_T, VID_T, VDATA_T, EDATA_T, traits_t>(vm_ptr) {}
 
   virtual ~ImmutableEdgecutFragment() = default;
 
@@ -158,65 +167,41 @@ class ImmutableEdgecutFragment
   using base_t::IsInnerVertexGid;
 
   static std::string type_info() {
-    std::string ret = "ImmutableEdgecutFragment<";
-    if (std::is_same<OID_T, int64_t>::value) {
-      ret += "int64_t, ";
-    } else if (std::is_same<OID_T, int32_t>::value) {
-      ret += "int32_t, ";
-    } else if (std::is_same<OID_T, std::string>::value) {
-      ret += "std::string, ";
-    } else {
-      LOG(FATAL) << "OID_T type not supported...";
-    }
-
-    if (std::is_same<VID_T, uint64_t>::value) {
-      ret += "uint64_t, ";
-    } else if (std::is_same<VID_T, uint32_t>::value) {
-      ret += "uint32_t, ";
-    } else {
-      LOG(FATAL) << "VID_T type not supported...";
-    }
-
-    if (std::is_same<VDATA_T, EmptyType>::value) {
-      ret += "empty, ";
-    } else if (std::is_same<VDATA_T, double>::value) {
-      ret += "double, ";
-    } else if (std::is_same<VDATA_T, float>::value) {
-      ret += "float, ";
-    } else {
-      LOG(FATAL) << "Vertex data type not supported...";
-    }
-
+    std::string ret = "";
     if (std::is_same<EDATA_T, EmptyType>::value) {
-      ret += "empty, ";
+      ret += "empty";
     } else if (std::is_same<EDATA_T, double>::value) {
-      ret += "double, ";
+      ret += "double";
     } else if (std::is_same<EDATA_T, float>::value) {
-      ret += "float, ";
+      ret += "float";
     } else {
       LOG(FATAL) << "Edge data type not supported...";
     }
 
     if (_load_strategy == LoadStrategy::kOnlyOut) {
-      ret += "out";
+      ret += "_out";
     } else if (_load_strategy == LoadStrategy::kOnlyIn) {
-      ret += "in";
+      ret += "_in";
     } else if (_load_strategy == LoadStrategy::kBothOutIn) {
-      ret += "both";
+      ret += "_both";
     } else {
       LOG(FATAL) << "Invalid load strategy...";
     }
 
-    ret += ">";
+    using partitioner_t = typename VERTEX_MAP_T::partitioner_t;
+    if (std::is_same<partitioner_t, HashPartitioner<OID_T>>::value) {
+      ret += "_hash";
+    } else if (std::is_same<partitioner_t,
+                            SegmentedPartitioner<OID_T>>::value) {
+      ret += "_seg";
+    }
 
     return ret;
   }
 
-  void Init(const CommSpec& comm_spec, bool directed,
-            std::unique_ptr<VertexMap<OID_T, VID_T>>&& vm_ptr,
-            std::vector<internal_vertex_t>& vertices,
-            std::vector<edge_t>& edges) {
-    init(comm_spec.fid(), directed, std::move(vm_ptr));
+  void Init(fid_t fid, bool directed, std::vector<internal_vertex_t>& vertices,
+            std::vector<edge_t>& edges) override {
+    init(fid, directed);
 
     static constexpr VID_T invalid_vid = std::numeric_limits<VID_T>::max();
     {
@@ -335,167 +320,7 @@ class ImmutableEdgecutFragment
     vdata_.clear();
     vdata_.resize(ivnum_ + ovnum_);
     vsecret_.clear();
-    vsecret_.resize(ivnum_ + ovnum_, false);
-    if (sizeof(internal_vertex_t) > sizeof(VID_T)) {
-      for (auto& v : vertices) {
-        VID_T gid = v.vid;
-        if (id_parser_.get_fragment_id(gid) == fid_) {
-          vdata_[id_parser_.get_local_id(gid)] = v.vdata;
-          vsecret_[id_parser_.get_local_id(gid)] = v.secret;
-        } else {
-          auto iter = ovg2l_.find(gid);
-          if (iter != ovg2l_.end()) {
-            vdata_[iter->second] = v.vdata;
-            vsecret_[iter->second] = v.secret;
-          }
-        }
-      }
-    }
-  }
-
-  void ParallelInit(const CommSpec& comm_spec, bool directed,
-                    std::unique_ptr<VertexMap<OID_T, VID_T>>&& vm_ptr,
-                    std::vector<internal_vertex_t>& vertices,
-                    std::vector<edge_t>& edges, int concurrency) {
-    init(comm_spec.fid(), directed, std::move(vm_ptr));
-
-    static constexpr VID_T invalid_vid = std::numeric_limits<VID_T>::max();
-    {
-      auto iter_in = [&](Edge<VID_T, EDATA_T>& e,
-                         std::vector<VID_T>& outer_vertices) {
-        if (IsInnerVertexGid(e.dst)) {
-          if (!IsInnerVertexGid(e.src)) {
-            outer_vertices.push_back(e.src);
-          }
-        } else {
-          e.src = invalid_vid;
-        }
-      };
-      auto iter_out = [&](Edge<VID_T, EDATA_T>& e,
-                          std::vector<VID_T>& outer_vertices) {
-        if (IsInnerVertexGid(e.src)) {
-          if (!IsInnerVertexGid(e.dst)) {
-            outer_vertices.push_back(e.dst);
-          }
-        } else {
-          e.src = invalid_vid;
-        }
-      };
-      auto iter_out_in = [&](Edge<VID_T, EDATA_T>& e,
-                             std::vector<VID_T>& outer_vertices) {
-        if (IsInnerVertexGid(e.src)) {
-          if (!IsInnerVertexGid(e.dst)) {
-            outer_vertices.push_back(e.dst);
-          }
-        } else if (IsInnerVertexGid(e.dst)) {
-          outer_vertices.push_back(e.src);
-        } else {
-          e.src = invalid_vid;
-        }
-      };
-
-      auto iter_in_undirected = [&](Edge<VID_T, EDATA_T>& e,
-                                    std::vector<VID_T>& outer_vertices) {
-        if (IsInnerVertexGid(e.dst)) {
-          if (!IsInnerVertexGid(e.src)) {
-            outer_vertices.push_back(e.src);
-          }
-        } else {
-          if (IsInnerVertexGid(e.src)) {
-            outer_vertices.push_back(e.dst);
-          } else {
-            e.src = invalid_vid;
-          }
-        }
-      };
-      auto iter_out_undirected = [&](Edge<VID_T, EDATA_T>& e,
-                                     std::vector<VID_T>& outer_vertices) {
-        if (IsInnerVertexGid(e.src)) {
-          if (!IsInnerVertexGid(e.dst)) {
-            outer_vertices.push_back(e.dst);
-          }
-        } else {
-          if (IsInnerVertexGid(e.dst)) {
-            outer_vertices.push_back(e.src);
-          } else {
-            e.src = invalid_vid;
-          }
-        }
-      };
-
-      std::vector<std::vector<VID_T>> outer_vertices_vec(concurrency);
-      std::vector<std::thread> threads;
-      for (int i = 0; i < concurrency; ++i) {
-        threads.emplace_back(
-            [&](int tid) {
-              size_t batch = (edges.size() + concurrency - 1) / concurrency;
-              size_t begin = std::min(batch * tid, edges.size());
-              size_t end = std::min(begin + batch, edges.size());
-              auto& vec = outer_vertices_vec[tid];
-              if (load_strategy == LoadStrategy::kOnlyIn) {
-                if (directed) {
-                  for (size_t j = begin; j < end; ++j) {
-                    iter_in(edges[j], vec);
-                  }
-                } else {
-                  for (size_t j = begin; j < end; ++j) {
-                    iter_in_undirected(edges[j], vec);
-                  }
-                }
-              } else if (load_strategy == LoadStrategy::kOnlyOut) {
-                if (directed) {
-                  for (size_t j = begin; j < end; ++j) {
-                    iter_out(edges[j], vec);
-                  }
-                } else {
-                  for (size_t j = begin; j < end; ++j) {
-                    iter_out_undirected(edges[j], vec);
-                  }
-                }
-              } else if (load_strategy == LoadStrategy::kBothOutIn) {
-                for (size_t j = begin; j < end; ++j) {
-                  iter_out_in(edges[j], vec);
-                }
-              } else {
-                LOG(FATAL) << "Invalid load strategy";
-              }
-              DistinctSort(vec);
-            },
-            i);
-      }
-      for (auto& thrd : threads) {
-        thrd.join();
-      }
-      std::vector<VID_T> outer_vertices;
-      for (auto& vec : outer_vertices_vec) {
-        outer_vertices.insert(outer_vertices.end(), vec.begin(), vec.end());
-      }
-
-      DistinctSort(outer_vertices);
-
-      ovgid_.resize(outer_vertices.size());
-      memcpy(&ovgid_[0], &outer_vertices[0],
-             outer_vertices.size() * sizeof(VID_T));
-    }
-
-    vid_t ovid = ivnum_;
-    for (auto gid : ovgid_) {
-      ovg2l_.emplace(gid, ovid);
-      ++ovid;
-    }
-    ovnum_ = ovid - ivnum_;
-    this->inner_vertices_.SetRange(0, ivnum_);
-    this->outer_vertices_.SetRange(ivnum_, ivnum_ + ovnum_);
-    this->vertices_.SetRange(0, ivnum_ + ovnum_);
-
-    buildCSR(this->Vertices(), edges, load_strategy, concurrency);
-
-    initOuterVerticesOfFragment();
-
-    vdata_.clear();
-    vdata_.resize(ivnum_ + ovnum_);
-    vsecret_.clear();
-    vsecret_.resize(ivnum_ + ovnum_, false);
+    vsecret_.resize(ivnum_ + ovnum_);
     if (sizeof(internal_vertex_t) > sizeof(VID_T)) {
       for (auto& v : vertices) {
         VID_T gid = v.vid;
@@ -536,7 +361,7 @@ class ImmutableEdgecutFragment
       CHECK(io_adaptor->Write(&ovgid_[0], ovnum_ * sizeof(VID_T)));
     }
 
-    ia << vdata_ << vsecret_;
+    ia << vdata_;
     CHECK(io_adaptor->WriteArchive(ia));
     ia.Clear();
 
@@ -544,13 +369,10 @@ class ImmutableEdgecutFragment
   }
 
   template <typename IOADAPTOR_T>
-  void Deserialize(const CommSpec& comm_spec,
-                   std::unique_ptr<VertexMap<OID_T, VID_T>>&& vm_ptr,
-                   const std::string& prefix) {
-    vm_ptr_ = std::move(vm_ptr);
+  void Deserialize(const std::string& prefix, const fid_t fid) {
     char fbuf[1024];
     snprintf(fbuf, sizeof(fbuf), kSerializationFilenameFormat, prefix.c_str(),
-             comm_spec.fid());
+             fid);
     auto io_adaptor =
         std::unique_ptr<IOADAPTOR_T>(new IOADAPTOR_T(std::string(fbuf)));
     io_adaptor->Open();
@@ -586,14 +408,13 @@ class ImmutableEdgecutFragment
     }
 
     CHECK(io_adaptor->ReadArchive(oa));
-    oa >> vdata_ >> vsecret_;
+    oa >> vdata_;
 
     io_adaptor->Close();
   }
 
-  void PrepareToRunApp(const CommSpec& comm_spec, PrepareConf conf,
-                       const ParallelEngineSpec& pe_spec) override {
-    base_t::PrepareToRunApp(comm_spec, conf, pe_spec);
+  void PrepareToRunApp(const CommSpec& comm_spec, PrepareConf conf) override {
+    base_t::PrepareToRunApp(comm_spec, conf);
     if (conf.need_split_edges_by_fragment && !splited_edges_by_fragment_) {
       splitEdgesByFragment();
       splited_edges_by_fragment_ = true;
@@ -615,6 +436,14 @@ class ImmutableEdgecutFragment
     vdata_[v.GetValue()] = val;
   }
 
+  inline bool GetSecret(const vertex_t& v) const {
+    return vsecret_[v.GetValue()];
+  }
+
+  inline void SetSecret(const vertex_t& v, bool val) {
+    vsecret_[v.GetValue()] = val;
+  }
+
   bool OuterVertexGid2Lid(VID_T gid, VID_T& lid) const override {
     auto iter = ovg2l_.find(gid);
     if (iter != ovg2l_.end()) {
@@ -627,14 +456,6 @@ class ImmutableEdgecutFragment
 
   VID_T GetOuterVertexGid(vertex_t v) const override {
     return ovgid_[v.GetValue() - ivnum_];
-  }
-
-  inline bool GetSecret(const vertex_t& v) const {
-    return vsecret_[v.GetValue()];
-  }
-
-  inline void SetSecret(const vertex_t& v, bool val) {
-    vsecret_[v.GetValue()] = val;
   }
 
  public:
@@ -907,14 +728,13 @@ class ImmutableEdgecutFragment
 #endif
   }
 
+  using base_t::ivnum_;
+  VID_T ovnum_;
   using base_t::directed_;
   using base_t::fid_;
   using base_t::fnum_;
   using base_t::id_parser_;
-  using base_t::ivnum_;
-  using base_t::vm_ptr_;
 
-  VID_T ovnum_;
   ska::flat_hash_map<VID_T, VID_T, std::hash<VID_T>, std::equal_to<VID_T>,
                      Allocator<std::pair<VID_T, VID_T>>>
       ovg2l_;
@@ -922,7 +742,8 @@ class ImmutableEdgecutFragment
   Array<VDATA_T, Allocator<VDATA_T>> vdata_;
   Array<bool, Allocator<bool>> vsecret_;
 
-  std::vector<std::pair<VID_T, VID_T>> outer_vertices_of_frag_;
+  using base_t::outer_vertices_of_frag_;
+
   std::vector<VertexArray<inner_vertices_t, nbr_t*>> iespliters_, oespliters_;
   bool splited_edges_by_fragment_ = false;
   bool splited_edges_ = false;
