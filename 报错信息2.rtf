@@ -1,0 +1,608 @@
+{\rtf1\ansi\ansicpg936\cocoartf2822
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fnil\fcharset0 Menlo-Regular;\f1\fnil\fcharset0 Menlo-Bold;}
+{\colortbl;\red255\green255\blue255;\red190\green190\blue190;\red252\green72\blue72;\red164\green232\blue86;
+}
+{\*\expandedcolortbl;;\cssrgb\c79216\c79216\c79216;\cssrgb\c100000\c38039\c35294;\cssrgb\c69412\c91373\c41176;
+}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\deftab720
+\pard\pardeftab720\partightenfactor0
+
+\f0\fs28 \cf2 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 In file included from 
+\f1\b /home/hust/privacy-1224/libgrape-lite/tests/load_tests.cc:34:0
+\f0\b0 :      \
+/home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/sssp/sssp.h: In instantiatio\
+n of \'91
+\f1\b void grape::SSSP::WaitTEE(grape::SSSP::context_t&) [with FRAG_T = gra
+\f0\b0 \
+pe::ImmutableEdgecutFragment, unsigned int, grape::EmptyTy\
+pe, double, (grape::LoadStrategy)0>; grape::SSSP::context_t = grape::SSSPContext\
+ape::ImmutableEdgecutFragment, unsigned int, grape::EmptyT\
+ype, double, (grape::LoadStrategy)0> >]\'92:                                                  \
+\pard\pardeftab720\partightenfactor0
+
+\f1\b \cf2 /home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/sssp/sssp.h:227:12:
+\f0\b0    requir\
+ed from \'91
+\f1\b void grape::SSSP::IncEval(const fragment_t&, grape::SSSP::context_
+\f0\b0 \
+t&, grape::SSSP::message_manager_t&) [with FRAG_T = grape::ImmutableEdgecutFragment\
+, unsigned int, grape::EmptyType, double, (grape::LoadStra\
+tegy)0>; grape::SSSP::fragment_t = grape::ImmutableEdgecutFragment\
+sic_string, unsigned int, grape::EmptyType, double, (grape::LoadStrategy)0>; grape::S\
+SSP::context_t = grape::SSSPContext\
+asic_string, unsigned int, grape::EmptyType, double, (grape::LoadStrategy)0> >; grape\
+::SSSP::message_manager_t = grape::ParallelMessageManager]\'92                        \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/grape/worker/worker.h:208:5:
+\f0\b0    required from \'91
+\f1\b typenam
+\f0\b0 \
+e std::enable_if<(! std::is_same\
+ent_t> >::value)>::type grape::Worker::runIncEval() [with T = gra\
+pe::ParallelMessageManager; APP_T = grape::SSSP\
+1::basic_string, unsigned int, grape::EmptyType, double, (grape::LoadStrategy)0> >; M\
+ESSAGE_MANAGER_T = grape::ParallelMessageManager; typename std::enable_if<(! std::is_same\
+, grape::AutoParallelMessageManager >::value)>::type = void]\'92  \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/grape/worker/worker.h:131:17:
+\f0\b0    required from \'91
+\f1\b void g
+\f0\b0 \
+rape::Worker::Query(Args&& ...) [with Args = \{std::__cxx11::basic\
+_string, std::allocator >\}; APP_T = grape::SSSP\
+mmutableEdgecutFragment, unsigned int, grape::EmptyType, d\
+ouble, (grape::LoadStrategy)0> >; MESSAGE_MANAGER_T = grape::ParallelMessageManager]\'92      \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/tests/load_tests.cc:78:3:
+\f0\b0    required from \'91
+\f1\b void DoQue
+\f0\b0 \
+ry(std::shared_ptr<_Tp>, std::shared_ptr<_Up>, const grape::CommSpec&, const grape::Paralle\
+lEngineSpec&, const string&, Args ...) [with FRAG_T = grape::ImmutableEdgecutFragment\
+__cxx11::basic_string, unsigned int, grape::EmptyType, double, (grape::LoadStrategy)0\
+>; APP_T = grape::SSSP, un\
+signed int, grape::EmptyType, double, (grape::LoadStrategy)0> >; Args = \{std::__cxx11::basi\
+c_string, std::allocator >\}; std::__cxx11::string = std:\
+:__cxx11::basic_string]\'92                                                             \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/tests/load_tests.cc:115:36:
+\f0\b0    required from \'91
+\f1\b void Cre
+\f0\b0 \
+ateAndQuery(const grape::CommSpec&, const grape::LoadGraphSpec&, const string&, const grape\
+::ParallelEngineSpec&, Args ...) [with OID_T = std::__cxx11::basic_string; VID_T = un\
+signed int; VDATA_T = grape::EmptyType; EDATA_T = double; grape::LoadStrategy load_strategy\
+ = (grape::LoadStrategy)0; APP_T = grape::SSSP; Args = \{std::__cxx11::basic_string\
+d::char_traits, std::allocator >\}; std::__cxx11::string = std::__cxx11::basic_s\
+tring]\'92                                                                              \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/tests/load_tests.cc:166:68:
+\f0\b0    required from here     \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/sssp/sssp.h:46:36:
+\f0\b0  
+\f1\b \cf3 \strokec3 \uc0\u38169 \u35823 \u65306 
+\f0\b0 \cf2 \strokec2 \'91
+\f1\b co
+\f0\b0 \
+nst fragment_t \{aka const class grape::ImmutableEdgecutFragment\
+char>, unsigned int, grape::EmptyType, double, (grape::LoadStrategy)0>\}\'92 has no member name\
+d \'91
+\f1\b GetCommSpec
+\f0\b0 \'92                                                                            \
+     int worker_id = ctx.fragment().GetCommSpec().worker_id();                             \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/sssp/sssp.h:48:32:
+\f0\b0  
+\f1\b \cf3 \strokec3 \uc0\u38169 \u35823 \u65306 
+\f0\b0 \cf2 \strokec2 \'91
+\f1\b co
+\f0\b0 \
+nst fragment_t \{aka const class grape::ImmutableEdgecutFragment\
+char>, unsigned int, grape::EmptyType, double, (grape::LoadStrategy)0>\}\'92 has no member name\
+d \'91
+\f1\b GetCommSpec
+\f0\b0 \'92                                                                            \
+     MPI_Barrier(ctx.fragment().GetCommSpec().comm());                                     \
+/home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/sssp/sssp.h: In instantiatio\
+n of \'91
+\f1\b void grape::SSSP::WaitTEE(grape::SSSP::context_t&) [with FRAG_T = gra
+\f0\b0 \
+pe::ImmutableEdgecutFragment\
+Strategy)0>; grape::SSSP::context_t = grape::SSSPContext\
+gment >]\'92:       \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/sssp/sssp.h:227:12:
+\f0\b0    requir\
+ed from \'91
+\f1\b void grape::SSSP::IncEval(const fragment_t&, grape::SSSP::context_
+\f0\b0 \
+t&, grape::SSSP::message_manager_t&) [with FRAG_T = grape::ImmutableEdgecutFragment\
+; grape::SSSP\
+G_T>::fragment_t = grape::ImmutableEdgecutFragment\
+, double, (grape::LoadStrategy)0>; grape::SSSP::context_t = grape::SSSPContext\
+e::ImmutableEdgecutFragment\
+trategy)0> >; grape::SSSP::message_manager_t = grape::ParallelMessageManager]\'92     \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/grape/worker/worker.h:208:5:
+\f0\b0    required from \'91
+\f1\b typenam
+\f0\b0 \
+e std::enable_if<(! std::is_same\
+ent_t> >::value)>::type grape::Worker::runIncEval() [with T = gra\
+pe::ParallelMessageManager; APP_T = grape::SSSP\
+nsigned int, grape::EmptyType, double, (grape::LoadStrategy)0> >; MESSAGE_MANAGER_T = grape\
+::ParallelMessageManager; typename std::enable_if<(! std::is_same\
+sageManager >::value)>::type = void]\'92                          \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/grape/worker/worker.h:131:17:
+\f0\b0    required from \'91
+\f1\b void g
+\f0\b0 \
+rape::Worker::Query(Args&& ...) [with Args = \{long int\}; APP_T = \
+grape::SSSP\
+e, (grape::LoadStrategy)0> >; MESSAGE_MANAGER_T = grape::ParallelMessageManager]\'92          \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/tests/load_tests.cc:78:3:
+\f0\b0    required from \'91
+\f1\b void DoQue
+\f0\b0 \
+ry(std::shared_ptr<_Tp>, std::shared_ptr<_Up>, const grape::CommSpec&, const grape::Paralle\
+lEngineSpec&, const string&, Args ...) [with FRAG_T = grape::ImmutableEdgecutFragment\
+int, unsigned int, grape::EmptyType, double, (grape::LoadStrategy)0>; APP_T = grape::SSSP\
+rape::ImmutableEdgecutFragment\
+adStrategy)0> >; Args = \{long int\}; std::__cxx11::string = std::__cxx11::basic_string\
+]\'92                                                                                         \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/tests/load_tests.cc:115:36:
+\f0\b0    required from \'91
+\f1\b void Cre
+\f0\b0 \
+ateAndQuery(const grape::CommSpec&, const grape::LoadGraphSpec&, const string&, const grape\
+::ParallelEngineSpec&, Args ...) [with OID_T = long int; VID_T = unsigned int; VDATA_T = gr\
+ape::EmptyType; EDATA_T = double; grape::LoadStrategy load_strategy = (grape::LoadStrategy)\
+0; APP_T = grape::SSSP; Args = \{long int\}; std::__cxx11::string = std::__cxx11::basic_strin\
+g]\'92                                                                                  \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/tests/load_tests.cc:172:64:
+\f0\b0    required from here     \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/sssp/sssp.h:46:36:
+\f0\b0  
+\f1\b \cf3 \strokec3 \uc0\u38169 \u35823 \u65306 
+\f0\b0 \cf2 \strokec2 \'91
+\f1\b co
+\f0\b0 \
+nst fragment_t \{aka const class grape::ImmutableEdgecutFragment\
+pe::EmptyType, double, (grape::LoadStrategy)0>\}\'92 has no member named \'91
+\f1\b GetCommSpec
+\f0\b0 \'92         \
+     int worker_id = ctx.fragment().GetCommSpec().worker_id();                             \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/sssp/sssp.h:48:32:
+\f0\b0  
+\f1\b \cf3 \strokec3 \uc0\u38169 \u35823 \u65306 
+\f0\b0 \cf2 \strokec2 \'91
+\f1\b co
+\f0\b0 \
+nst fragment_t \{aka const class grape::ImmutableEdgecutFragment\
+pe::EmptyType, double, (grape::LoadStrategy)0>\}\'92 has no member named \'91
+\f1\b GetCommSpec
+\f0\b0 \'92         \
+     MPI_Barrier(ctx.fragment().GetCommSpec().comm());                                     \
+In file included from 
+\f1\b /home/hust/privacy-1224/libgrape-lite/tests/mutate_tests.cc:30:0
+\f0\b0 :    \
+/home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/sssp/sssp.h: In instantiatio\
+n of \'91
+\f1\b void grape::SSSP::WaitTEE(grape::SSSP::context_t&) [with FRAG_T = gra
+\f0\b0 \
+pe::MutableEdgecutFragment\
+rategy)0>; grape::SSSP::context_t = grape::SSSPContext\
+t >]\'92:           \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/sssp/sssp.h:227:12:
+\f0\b0    requir\
+ed from \'91
+\f1\b void grape::SSSP::IncEval(const fragment_t&, grape::SSSP::context_
+\f0\b0 \
+t&, grape::SSSP::message_manager_t&) [with FRAG_T = grape::MutableEdgecutFragment\
+ong int, unsigned int, grape::EmptyType, double, (grape::LoadStrategy)0>; grape::SSSP\
+T>::fragment_t = grape::MutableEdgecutFragment\
+uble, (grape::LoadStrategy)0>; grape::SSSP::context_t = grape::SSSPContext\
+utableEdgecutFragment\
+y)0> >; grape::SSSP::message_manager_t = grape::ParallelMessageManager]\'92           \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/grape/worker/worker.h:208:5:
+\f0\b0    required from \'91
+\f1\b typenam
+\f0\b0 \
+e std::enable_if<(! std::is_same\
+ent_t> >::value)>::type grape::Worker::runIncEval() [with T = gra\
+pe::ParallelMessageManager; APP_T = grape::SSSP\
+igned int, grape::EmptyType, double, (grape::LoadStrategy)0> >; MESSAGE_MANAGER_T = grape::\
+ParallelMessageManager; typename std::enable_if<(! std::is_same\
+geManager >::value)>::type = void]\'92                            \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/grape/worker/worker.h:131:17:
+\f0\b0    required from \'91
+\f1\b void g
+\f0\b0 \
+rape::Worker::Query(Args&& ...) [with Args = \{long int\}; APP_T = \
+grape::SSSP\
+ (grape::LoadStrategy)0> >; MESSAGE_MANAGER_T = grape::ParallelMessageManager]\'92            \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/tests/mutate_tests.cc:110:3:
+\f0\b0    required from \'91
+\f1\b void Ru
+\f0\b0 \
+nQuery(std::shared_ptr<_Tp>, const grape::CommSpec&, const string&, const grape::ParallelEn\
+gineSpec&, Args ...) [with FRAG_T = grape::MutableEdgecutFragment\
+rape::EmptyType, double, (grape::LoadStrategy)0>; APP_T = grape::SSSP\
+Fragment >; Args \
+= \{long int\}; std::__cxx11::string = std::__cxx11::basic_string]\'92                    \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/tests/mutate_tests.cc:132:35:
+\f0\b0    required from \'91
+\f1\b void B
+\f0\b0 \
+uildGraphAndQuery(const grape::CommSpec&, const string&, const string&, const string&, int,\
+ const string&, const grape::ParallelEngineSpec&, Args ...) [with FRAG_T = grape::MutableEd\
+gecutFragment; AP\
+P_T = grape::SSSP\
+ouble, (grape::LoadStrategy)0> >; Args = \{long int\}; std::__cxx11::string = std::__cxx11::b\
+asic_string]\'92                                                                        \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/tests/mutate_tests.cc:168:50:
+\f0\b0    required from \'91
+\f1\b void R
+\f0\b0 \
+unBenchmark() [with OID_T = long int; VID_T = unsigned int; VDATA_T = grape::EmptyType; EDA\
+TA_T = double]\'92                                                                            \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/tests/mutate_tests.cc:234:63:
+\f0\b0    required from here   \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/sssp/sssp.h:46:36:
+\f0\b0  
+\f1\b \cf3 \strokec3 \uc0\u38169 \u35823 \u65306 
+\f0\b0 \cf2 \strokec2 \'91
+\f1\b co
+\f0\b0 \
+nst fragment_t \{aka const class grape::MutableEdgecutFragment\
+::EmptyType, double, (grape::LoadStrategy)0>\}\'92 has no member named \'91
+\f1\b GetCommSpec
+\f0\b0 \'92           \
+     int worker_id = ctx.fragment().GetCommSpec().worker_id();                             \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/sssp/sssp.h:48:32:
+\f0\b0  
+\f1\b \cf3 \strokec3 \uc0\u38169 \u35823 \u65306 
+\f0\b0 \cf2 \strokec2 \'91
+\f1\b co
+\f0\b0 \
+nst fragment_t \{aka const class grape::MutableEdgecutFragment\
+::EmptyType, double, (grape::LoadStrategy)0>\}\'92 has no member named \'91
+\f1\b GetCommSpec
+\f0\b0 \'92           \
+     MPI_Barrier(ctx.fragment().GetCommSpec().comm());                                     \
+/home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/sssp/sssp.h: In instantiatio\
+n of \'91
+\f1\b void grape::SSSP::WaitTEE(grape::SSSP::context_t&) [with FRAG_T = gra
+\f0\b0 \
+pe::ImmutableEdgecutFragment\
+Strategy)0>; grape::SSSP::context_t = grape::SSSPContext\
+gment >]\'92:       \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/sssp/sssp.h:227:12:
+\f0\b0    requir\
+ed from \'91
+\f1\b void grape::SSSP::IncEval(const fragment_t&, grape::SSSP::context_
+\f0\b0 \
+t&, grape::SSSP::message_manager_t&) [with FRAG_T = grape::ImmutableEdgecutFragment\
+; grape::SSSP\
+G_T>::fragment_t = grape::ImmutableEdgecutFragment\
+, double, (grape::LoadStrategy)0>; grape::SSSP::context_t = grape::SSSPContext\
+e::ImmutableEdgecutFragment\
+trategy)0> >; grape::SSSP::message_manager_t = grape::ParallelMessageManager]\'92     \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/grape/worker/worker.h:208:5:
+\f0\b0    required from \'91
+\f1\b typenam
+\f0\b0 \
+e std::enable_if<(! std::is_same\
+ent_t> >::value)>::type grape::Worker::runIncEval() [with T = gra\
+pe::ParallelMessageManager; APP_T = grape::SSSP\
+nsigned int, grape::EmptyType, double, (grape::LoadStrategy)0> >; MESSAGE_MANAGER_T = grape\
+::ParallelMessageManager; typename std::enable_if<(! std::is_same\
+sageManager >::value)>::type = void]\'92                          \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/grape/worker/worker.h:131:17:
+\f0\b0    required from \'91
+\f1\b void g
+\f0\b0 \
+rape::Worker::Query(Args&& ...) [with Args = \{long int\}; APP_T = \
+grape::SSSP\
+e, (grape::LoadStrategy)0> >; MESSAGE_MANAGER_T = grape::ParallelMessageManager]\'92          \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/tests/mutate_tests.cc:110:3:
+\f0\b0    required from \'91
+\f1\b void Ru
+\f0\b0 \
+nQuery(std::shared_ptr<_Tp>, const grape::CommSpec&, const string&, const grape::ParallelEn\
+gineSpec&, Args ...) [with FRAG_T = grape::ImmutableEdgecutFragment\
+ grape::EmptyType, double, (grape::LoadStrategy)0>; APP_T = grape::SSSP\
+ecutFragment >; A\
+rgs = \{long int\}; std::__cxx11::string = std::__cxx11::basic_string]\'92                \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/tests/mutate_tests.cc:145:35:
+\f0\b0    required from \'91
+\f1\b void B
+\f0\b0 \
+uildImmutableGraphAndQuery(const grape::CommSpec&, const string&, const string&, const stri\
+ng&, const grape::ParallelEngineSpec&, Args ...) [with FRAG_T = grape::ImmutableEdgecutFrag\
+ment; APP_T = gra\
+pe::SSSP\
+(grape::LoadStrategy)0> >; Args = \{long int\}; std::__cxx11::string = std::__cxx11::basic_st\
+ring]\'92                                                                               \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/tests/mutate_tests.cc:175:59:
+\f0\b0    required from \'91
+\f1\b void R
+\f0\b0 \
+unBenchmark() [with OID_T = long int; VID_T = unsigned int; VDATA_T = grape::EmptyType; EDA\
+TA_T = double]\'92                                                                            \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/tests/mutate_tests.cc:234:63:
+\f0\b0    required from here   \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/sssp/sssp.h:46:36:
+\f0\b0  
+\f1\b \cf3 \strokec3 \uc0\u38169 \u35823 \u65306 
+\f0\b0 \cf2 \strokec2 \'91
+\f1\b co
+\f0\b0 \
+nst fragment_t \{aka const class grape::ImmutableEdgecutFragment\
+pe::EmptyType, double, (grape::LoadStrategy)0>\}\'92 has no member named \'91
+\f1\b GetCommSpec
+\f0\b0 \'92         \
+     int worker_id = ctx.fragment().GetCommSpec().worker_id();                             \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/sssp/sssp.h:48:32:
+\f0\b0  
+\f1\b \cf3 \strokec3 \uc0\u38169 \u35823 \u65306 
+\f0\b0 \cf2 \strokec2 \'91
+\f1\b co
+\f0\b0 \
+nst fragment_t \{aka const class grape::ImmutableEdgecutFragment\
+pe::EmptyType, double, (grape::LoadStrategy)0>\}\'92 has no member named \'91
+\f1\b GetCommSpec
+\f0\b0 \'92         \
+     MPI_Barrier(ctx.fragment().GetCommSpec().comm());                                     \
+In file included from 
+\f1\b /home/hust/privacy-1224/libgrape-lite/tests/mutable_fragment_tests.cc
+\f0\b0 \
+:42:0:                                                                                     \
+/home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/sssp/sssp.h: In instantiatio\
+n of \'91
+\f1\b void grape::SSSP::WaitTEE(grape::SSSP::context_t&) [with FRAG_T = gra
+\f0\b0 \
+pe::MutableEdgecutFragment\
+rategy)0>; grape::SSSP::context_t = grape::SSSPContext\
+t >]\'92:           \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/sssp/sssp.h:227:12:
+\f0\b0    requir\
+ed from \'91
+\f1\b void grape::SSSP::IncEval(const fragment_t&, grape::SSSP::context_
+\f0\b0 \
+t&, grape::SSSP::message_manager_t&) [with FRAG_T = grape::MutableEdgecutFragment\
+ong int, unsigned int, grape::EmptyType, double, (grape::LoadStrategy)0>; grape::SSSP\
+T>::fragment_t = grape::MutableEdgecutFragment\
+uble, (grape::LoadStrategy)0>; grape::SSSP::context_t = grape::SSSPContext\
+utableEdgecutFragment\
+y)0> >; grape::SSSP::message_manager_t = grape::ParallelMessageManager]\'92           \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/grape/worker/worker.h:208:5:
+\f0\b0    required from \'91
+\f1\b typenam
+\f0\b0 \
+e std::enable_if<(! std::is_same\
+ent_t> >::value)>::type grape::Worker::runIncEval() [with T = gra\
+pe::ParallelMessageManager; APP_T = grape::SSSP\
+igned int, grape::EmptyType, double, (grape::LoadStrategy)0> >; MESSAGE_MANAGER_T = grape::\
+ParallelMessageManager; typename std::enable_if<(! std::is_same\
+geManager >::value)>::type = void]\'92                            \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/grape/worker/worker.h:131:17:
+\f0\b0    required from \'91
+\f1\b void g
+\f0\b0 \
+rape::Worker::Query(Args&& ...) [with Args = \{long int\}; APP_T = \
+grape::SSSP\
+ (grape::LoadStrategy)0> >; MESSAGE_MANAGER_T = grape::ParallelMessageManager]\'92            \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/tests/mutable_fragment_tests.cc:98:3:
+\f0\b0    required from\
+ \'91
+\f1\b void DoQuery(std::shared_ptr<_Tp>, std::shared_ptr<_Up>, const grape::CommSpec&, const gr
+\f0\b0 \
+ape::ParallelEngineSpec&, const string&, Args ...) [with FRAG_T = grape::MutableEdgecutFrag\
+ment; APP_T = gra\
+pe::SSSP\
+rape::LoadStrategy)0> >; Args = \{long int\}; std::__cxx11::string = std::__cxx11::basic_stri\
+ng]\'92                                                                                 \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/tests/mutable_fragment_tests.cc:143:36:
+\f0\b0    required fr\
+om \'91
+\f1\b void CreateAndQuery(const grape::CommSpec&, const string&, int, const grape::ParallelEn
+\f0\b0 \
+gineSpec&, Args ...) [with OID_T = long int; VID_T = unsigned int; VDATA_T = grape::EmptyTy\
+pe; EDATA_T = double; grape::LoadStrategy load_strategy = (grape::LoadStrategy)0; APP_T = g\
+rape::SSSP; Args = \{long int\}; std::__cxx11::string = std::__cxx11::basic_string]\'92   \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/tests/mutable_fragment_tests.cc:167:72:
+\f0\b0    required fr\
+om \'91
+\f1\b void Run() [with OID_T = long int; VID_T = unsigned int; VDATA_T = grape::EmptyType; ED
+\f0\b0 \
+ATA_T = double]\'92                                                                           \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/tests/mutable_fragment_tests.cc:263:54:
+\f0\b0    required fr\
+om here                                                                                    \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/sssp/sssp.h:46:36:
+\f0\b0  
+\f1\b \cf3 \strokec3 \uc0\u38169 \u35823 \u65306 
+\f0\b0 \cf2 \strokec2 \'91
+\f1\b co
+\f0\b0 \
+nst fragment_t \{aka const class grape::MutableEdgecutFragment\
+::EmptyType, double, (grape::LoadStrategy)0>\}\'92 has no member named \'91
+\f1\b GetCommSpec
+\f0\b0 \'92           \
+     int worker_id = ctx.fragment().GetCommSpec().worker_id();                             \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/sssp/sssp.h:48:32:
+\f0\b0  
+\f1\b \cf3 \strokec3 \uc0\u38169 \u35823 \u65306 
+\f0\b0 \cf2 \strokec2 \'91
+\f1\b co
+\f0\b0 \
+nst fragment_t \{aka const class grape::MutableEdgecutFragment\
+::EmptyType, double, (grape::LoadStrategy)0>\}\'92 has no member named \'91
+\f1\b GetCommSpec
+\f0\b0 \'92           \
+     MPI_Barrier(ctx.fragment().GetCommSpec().comm());                                     \
+make[2]: *** [CMakeFiles/load_tests.dir/build.make:63\uc0\u65306 CMakeFiles/load_tests.dir/tests/load\
+_tests.cc.o] \uc0\u38169 \u35823  1                                                                        \
+make[2]: \uc0\u31163 \u24320 \u30446 \u24405 \'93/home/hust/privacy-1224/libgrape-lite/build\'94                             \
+make[1]: *** [CMakeFiles/Makefile2:224\uc0\u65306 CMakeFiles/load_tests.dir/all] \u38169 \u35823  2              \
+make[1]: *** \uc0\u27491 \u22312 \u31561 \u24453 \u26410 \u23436 \u25104 \u30340 \u20219 \u21153 ....                                                      \
+In file included from 
+\f1\b /home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/run_ap
+\f0\b0 \
+p.h:59:0,                                                                                  \
+                 from 
+\f1\b /home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/run_ap
+\f0\b0 \
+p.cc:16:                                                                                   \
+/home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/sssp/sssp.h: In instantiatio\
+n of \'91
+\f1\b void grape::SSSP::WaitTEE(grape::SSSP::context_t&) [with FRAG_T = gra
+\f0\b0 \
+pe::ImmutableEdgecutFragment\
+Strategy)0>; grape::SSSP::context_t = grape::SSSPContext\
+gment >]\'92:       \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/sssp/sssp.h:227:12:
+\f0\b0    requir\
+ed from \'91
+\f1\b void grape::SSSP::IncEval(const fragment_t&, grape::SSSP::context_
+\f0\b0 \
+t&, grape::SSSP::message_manager_t&) [with FRAG_T = grape::ImmutableEdgecutFragment\
+; grape::SSSP\
+G_T>::fragment_t = grape::ImmutableEdgecutFragment\
+, double, (grape::LoadStrategy)0>; grape::SSSP::context_t = grape::SSSPContext\
+e::ImmutableEdgecutFragment\
+trategy)0> >; grape::SSSP::message_manager_t = grape::ParallelMessageManager]\'92     \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/grape/worker/worker.h:208:5:
+\f0\b0    required from \'91
+\f1\b typenam
+\f0\b0 \
+e std::enable_if<(! std::is_same\
+ent_t> >::value)>::type grape::Worker::runIncEval() [with T = gra\
+pe::ParallelMessageManager; APP_T = grape::SSSP\
+nsigned int, grape::EmptyType, double, (grape::LoadStrategy)0> >; MESSAGE_MANAGER_T = grape\
+::ParallelMessageManager; typename std::enable_if<(! std::is_same\
+sageManager >::value)>::type = void]\'92                          \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/grape/worker/worker.h:131:17:
+\f0\b0    required from \'91
+\f1\b void g
+\f0\b0 \
+rape::Worker::Query(Args&& ...) [with Args = \{long int\}; APP_T = \
+grape::SSSP\
+e, (grape::LoadStrategy)0> >; MESSAGE_MANAGER_T = grape::ParallelMessageManager]\'92          \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/utils.h:65:3:
+\f0\b0    required fro\
+m \'91
+\f1\b void grape::DoQuery(std::shared_ptr<_Tp>, std::shared_ptr<_Up>, const grape::CommSpec&, 
+\f0\b0 \
+const grape::ParallelEngineSpec&, const string&, Args ...) [with FRAG_T = grape::ImmutableE\
+dgecutFragment; A\
+PP_T = grape::SSSP\
+, double, (grape::LoadStrategy)0> >; Args = \{long int\}; std::__cxx11::string = std::__cxx11\
+::basic_string]\'92                                                                     \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/run_app.h:129:36:
+\f0\b0    required\
+ from \'91
+\f1\b void grape::CreateAndQuery(const grape::CommSpec&, const string&, int, const grape::
+\f0\b0 \
+ParallelEngineSpec&, Args ...) [with OID_T = long int; VID_T = unsigned int; VDATA_T = grap\
+e::EmptyType; EDATA_T = double; grape::LoadStrategy load_strategy = (grape::LoadStrategy)0;\
+ APP_T = grape::SSSP; Args = \{long int\}; std::__cxx11::string = std::__cxx11::basic_string<\
+char>]\'92                                                                                    \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/run_app.h:221:34:
+\f0\b0    required\
+ from \'91
+\f1\b void grape::Run() [with OID_T = long int; VID_T = unsigned int; VDATA_T = grape::Emp
+\f0\b0 \
+tyType; EDATA_T = double]\'92                                                                 \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/run_app.cc:49:63:
+\f0\b0    required\
+ from here                                                                                 \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/sssp/sssp.h:46:36:
+\f0\b0  
+\f1\b \cf3 \strokec3 \uc0\u38169 \u35823 \u65306 
+\f0\b0 \cf2 \strokec2 \'91
+\f1\b co
+\f0\b0 \
+nst fragment_t \{aka const class grape::ImmutableEdgecutFragment\
+pe::EmptyType, double, (grape::LoadStrategy)0>\}\'92 has no member named \'91
+\f1\b GetCommSpec
+\f0\b0 \'92         \
+     int worker_id = ctx.fragment().GetCommSpec().worker_id();                             \
+
+\f1\b /home/hust/privacy-1224/libgrape-lite/examples/analytical_apps/sssp/sssp.h:48:32:
+\f0\b0  
+\f1\b \cf3 \strokec3 \uc0\u38169 \u35823 \u65306 
+\f0\b0 \cf2 \strokec2 \'91
+\f1\b co
+\f0\b0 \
+nst fragment_t \{aka const class grape::ImmutableEdgecutFragment\
+pe::EmptyType, double, (grape::LoadStrategy)0>\}\'92 has no member named \'91
+\f1\b GetCommSpec
+\f0\b0 \'92         \
+     MPI_Barrier(ctx.fragment().GetCommSpec().comm());                                     \
+make[2]: *** [CMakeFiles/mutate_tests.dir/build.make:63\uc0\u65306 CMakeFiles/mutate_tests.dir/tests/\
+mutate_tests.cc.o] \uc0\u38169 \u35823  1                                                                  \
+make[2]: \uc0\u31163 \u24320 \u30446 \u24405 \'93/home/hust/privacy-1224/libgrape-lite/build\'94                             \
+make[1]: *** [CMakeFiles/Makefile2:278\uc0\u65306 CMakeFiles/mutate_tests.dir/all] \u38169 \u35823  2            \
+make[2]: *** [CMakeFiles/mutable_fragment_tests.dir/build.make:63\uc0\u65306 CMakeFiles/mutable_fragm\
+ent_tests.dir/tests/mutable_fragment_tests.cc.o] \uc0\u38169 \u35823  1                                    \
+make[2]: \uc0\u31163 \u24320 \u30446 \u24405 \'93/home/hust/privacy-1224/libgrape-lite/build\'94                             \
+make[1]: *** [CMakeFiles/Makefile2:251\uc0\u65306 CMakeFiles/mutable_fragment_tests.dir/all] \u38169 \u35823  2  \
+make[2]: *** [CMakeFiles/analytical_apps.dir/build.make:76\uc0\u65306 CMakeFiles/analytical_apps.dir/\
+examples/analytical_apps/run_app.cc.o] \uc0\u38169 \u35823  1                                              \
+make[2]: \uc0\u31163 \u24320 \u30446 \u24405 \'93/home/hust/privacy-1224/libgrape-lite/build\'94                             \
+make[1]: *** [CMakeFiles/Makefile2:170\uc0\u65306 CMakeFiles/analytical_apps.dir/all] \u38169 \u35823  2         \
+[ 71%] 
+\f1\b \cf4 \strokec4 Linking CXX executable vertex_map_tests
+\f0\b0 \cf2 \strokec2                                              \
+make[2]: \uc0\u31163 \u24320 \u30446 \u24405 \'93/home/hust/privacy-1224/libgrape-lite/build\'94                             \
+[ 71%] Built target vertex_map_tests                                                       \
+make[1]: \uc0\u31163 \u24320 \u30446 \u24405 \'93/home/hust/privacy-1224/libgrape-lite/build\'94                             \
+make: *** [Makefile:130\uc0\u65306 all] \u38169 \u35823  2                                                       \
+[root@master build]#                                                                       \
+}

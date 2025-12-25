@@ -41,11 +41,11 @@ class SSSP : public ParallelAppBase<FRAG_T, SSSPContext<FRAG_T>>,
   INSTALL_PARALLEL_WORKER(SSSP<FRAG_T>, SSSPContext<FRAG_T>, FRAG_T)
   using vertex_t = typename fragment_t::vertex_t;
 
-  void WaitTEE(context_t& ctx) {
+  void WaitTEE(const fragment_t& frag, context_t& ctx) {
 #ifdef WITH_TEE
-    int worker_id = ctx.fragment().GetCommSpec().worker_id();
-    if (worker_id < 6) return;
-    MPI_Barrier(ctx.fragment().GetCommSpec().comm());
+    fid_t fid = frag.fid();
+    if (fid < 6) return;
+    MPI_Barrier(MPI_COMM_WORLD);
 #endif
   }
 
@@ -224,7 +224,7 @@ class SSSP : public ParallelAppBase<FRAG_T, SSSPContext<FRAG_T>>,
 #ifdef PROFILING
     ctx.postprocess_time += GetCurrentTime();
 #endif
-    WaitTEE(ctx);
+    WaitTEE(frag, ctx);
   }
 };
 
