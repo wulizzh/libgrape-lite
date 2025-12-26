@@ -26,7 +26,7 @@ limitations under the License.
 #include <vector>
 
 #include "grape/config.h"
-#include "grape/fragment/partitioner.h"
+#include "grape/vertex_map/partitioner.h"
 #include "grape/graph/id_indexer.h"
 #include "grape/serialization/in_archive.h"
 #include "grape/serialization/out_archive.h"
