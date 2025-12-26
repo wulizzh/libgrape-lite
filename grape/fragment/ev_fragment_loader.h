@@ -24,7 +24,7 @@ limitations under the License.
 #include <vector>
 
 #include "grape/fragment/basic_fragment_loader.h"
-#include "grape/fragment/partitioner.h"
+#include "grape/vertex_map/partitioner.h"
 #include "grape/io/line_parser_base.h"
 #include "grape/io/local_io_adaptor.h"
 #include "grape/io/tsv_line_parser.h"
