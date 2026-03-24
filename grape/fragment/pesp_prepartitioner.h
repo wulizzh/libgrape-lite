@@ -360,9 +360,15 @@ class PESPPrePartitioner {
                                    reverse_dependency, config);
         double score = affinity - config.omega * delta_load;
 
-        traces[i].push_back(
-            CandidateTrace{fid, feasible, current_mem, next_mem, affinity,
-                           delta_load, score});
+        CandidateTrace candidate_trace;
+        candidate_trace.fid = fid;
+        candidate_trace.feasible = feasible;
+        candidate_trace.mem_before = current_mem;
+        candidate_trace.mem_after = next_mem;
+        candidate_trace.affinity = affinity;
+        candidate_trace.delta_load = delta_load;
+        candidate_trace.score = score;
+        traces[i].push_back(candidate_trace);
 
         if (feasible) {
           has_feasible = true;
