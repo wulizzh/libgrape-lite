@@ -18,6 +18,8 @@ limitations under the License.
 
 #include <mpi.h>
 
+#include <algorithm>
+#include <iostream>
 #include <memory>
 #include <string>
 #include <utility>
@@ -126,6 +128,33 @@ class EVFragmentLoader {
         vprivacy_list.push_back(v_privacy);
       }
       io_adaptor->Close();
+
+      if (comm_spec_.worker_id() == 0) {
+        size_t private_vertex_count = 0;
+        for (auto privacy : vprivacy_list) {
+          if (privacy != 0) {
+            ++private_vertex_count;
+          }
+        }
+        std::cout << "[Loader] parsed vertex file: vertices=" << id_list.size()
+                  << ", private_vertices=" << private_vertex_count
+                  << std::endl;
+        if (!id_list.empty()) {
+          size_t sample_num = std::min(static_cast<size_t>(5), id_list.size());
+          std::cout << "[Loader] vertex privacy sample:";
+          for (size_t i = 0; i < sample_num; ++i) {
+            std::cout << " (" << id_list[i] << ",p=" << vprivacy_list[i]
+                      << ")";
+          }
+          std::cout << std::endl;
+        }
+        if (private_vertex_count == 0) {
+          std::cout
+              << "[Loader][WARN] all parsed vertex privacy flags are zero. "
+                 "Please verify the vfile column layout matches the parser."
+              << std::endl;
+        }
+      }
     }
 
     partitioner_t partitioner(comm_spec_.fnum(), id_list);

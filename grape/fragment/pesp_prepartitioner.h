@@ -20,6 +20,7 @@ limitations under the License.
 #include <cmath>
 #include <exception>
 #include <fstream>
+#include <iostream>
 #include <limits>
 #include <memory>
 #include <string>
@@ -327,13 +328,60 @@ class PESPPrePartitioner {
       vertex.cost = PrivacyCost(vertex, config);
     }
 
+    if (comm_spec_.worker_id() == 0) {
+      size_t private_vertex_count = 0;
+      size_t total_private_in_degree = 0;
+      double total_cost = 0.0;
+      for (auto& vertex : vertices) {
+        if (vertex.is_private) {
+          ++private_vertex_count;
+        }
+        total_private_in_degree += vertex.private_in_degree;
+        total_cost += vertex.cost;
+      }
+      std::cout << "[PESP] start pre-partitioning: vertices=" << vertex_num
+                << ", private_vertices=" << private_vertex_count
+                << ", directed=" << directed
+                << ", fragments=" << static_cast<size_t>(fnum)
+                << ", total_private_in_degree=" << total_private_in_degree
+                << ", total_cost=" << total_cost << std::endl;
+      std::cout << "[PESP] config: base_cost=" << config.base_cost
+                << ", alpha=" << config.alpha << ", beta=" << config.beta
+                << ", gamma=" << config.gamma << ", mu=" << config.mu
+                << ", omega=" << config.omega
+                << ", secure_capacity=" << config.secure_capacity
+                << ", topology_weight=" << config.topology_weight
+                << ", blueprint_weight=" << config.blueprint_weight
+                << ", reverse_weight=" << config.reverse_weight << std::endl;
+    }
+
     std::vector<fid_t> blueprint = BuildBlueprint(vertices, fnum);
+    if (comm_spec_.worker_id() == 0) {
+      std::vector<size_t> blueprint_vertex_count(fnum, 0);
+      std::vector<size_t> blueprint_private_vertex_count(fnum, 0);
+      for (size_t i = 0; i < vertex_num; ++i) {
+        ++blueprint_vertex_count[blueprint[i]];
+        if (vertices[i].is_private) {
+          ++blueprint_private_vertex_count[blueprint[i]];
+        }
+      }
+      std::cout << "[PESP] blueprint summary:" << std::endl;
+      for (fid_t fid = 0; fid < fnum; ++fid) {
+        std::cout << "  [PESP][blueprint][frag-" << fid
+                  << "] vertex_count=" << blueprint_vertex_count[fid]
+                  << ", private_vertex_count="
+                  << blueprint_private_vertex_count[fid] << std::endl;
+      }
+    }
+
     std::vector<fid_t> assignments(vertex_num, InvalidFid());
     std::vector<std::vector<double>> reverse_dependency(
         vertex_num, std::vector<double>(fnum, 0.0));
     std::vector<FragmentState> fragments(fnum);
     std::vector<DecisionTrace> decisions(vertex_num);
     std::vector<std::vector<CandidateTrace>> traces(vertex_num);
+    size_t forced_fallback_count = 0;
+    size_t progress_stride = std::max(static_cast<size_t>(1), vertex_num / 10);
 
     for (size_t i = 0; i < vertex_num; ++i) {
       fid_t best_fid = InvalidFid();
@@ -389,6 +437,7 @@ class PESPPrePartitioner {
       }
 
       if (!has_feasible) {
+        ++forced_fallback_count;
         best_fid = 0;
         for (fid_t fid = 1; fid < fnum; ++fid) {
           if (fragments[fid].secure_mem_used <
@@ -420,6 +469,14 @@ class PESPPrePartitioner {
           reverse_dependency[dst_index][best_fid] += 1.0;
         }
       }
+
+      if (comm_spec_.worker_id() == 0 &&
+          ((i + 1) % progress_stride == 0 || (i + 1) == vertex_num)) {
+        std::cout << "[PESP] assignment progress: " << (i + 1) << "/"
+                  << vertex_num
+                  << ", forced_fallback_count=" << forced_fallback_count
+                  << std::endl;
+      }
     }
 
     for (fid_t fid = 0; fid < fnum; ++fid) {
@@ -427,6 +484,21 @@ class PESPPrePartitioner {
               << fragments[fid].vertex_count
               << ", private_vertex_count=" << fragments[fid].private_vertex_count
               << ", secure_mem_used=" << fragments[fid].secure_mem_used;
+    }
+
+    if (comm_spec_.worker_id() == 0) {
+      std::cout << "[PESP] final fragment summary:" << std::endl;
+      for (fid_t fid = 0; fid < fnum; ++fid) {
+        std::cout << "  [PESP][final][frag-" << fid
+                  << "] vertex_count=" << fragments[fid].vertex_count
+                  << ", private_vertex_count="
+                  << fragments[fid].private_vertex_count
+                  << ", secure_mem_used=" << fragments[fid].secure_mem_used
+                  << ", secure_load=" << fragments[fid].secure_load
+                  << std::endl;
+      }
+      std::cout << "[PESP] assignment completed: forced_fallback_count="
+                << forced_fallback_count << std::endl;
     }
 
     DumpDiagnostics(id_list, assignments, vertices, fragments, decisions,
