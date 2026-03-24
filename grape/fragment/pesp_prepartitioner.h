@@ -98,7 +98,7 @@ class PESPPrePartitioner {
     size_t feasible_candidates = 0;
   };
 
-  static constexpr fid_t kInvalidFid = std::numeric_limits<fid_t>::max();
+  static fid_t InvalidFid() { return std::numeric_limits<fid_t>::max(); }
 
   static double PrivacyCost(const VertexState& state, const PESPConfig& config) {
     double attr_indicator = state.is_private ? 1.0 : 0.0;
@@ -328,7 +328,7 @@ class PESPPrePartitioner {
     }
 
     std::vector<fid_t> blueprint = BuildBlueprint(vertices, fnum);
-    std::vector<fid_t> assignments(vertex_num, kInvalidFid);
+    std::vector<fid_t> assignments(vertex_num, InvalidFid());
     std::vector<std::vector<double>> reverse_dependency(
         vertex_num, std::vector<double>(fnum, 0.0));
     std::vector<FragmentState> fragments(fnum);
@@ -336,7 +336,7 @@ class PESPPrePartitioner {
     std::vector<std::vector<CandidateTrace>> traces(vertex_num);
 
     for (size_t i = 0; i < vertex_num; ++i) {
-      fid_t best_fid = kInvalidFid;
+      fid_t best_fid = InvalidFid();
       double best_score = -std::numeric_limits<double>::infinity();
       bool has_feasible = false;
       decisions[i].blueprint_fid = blueprint[i];
@@ -373,7 +373,7 @@ class PESPPrePartitioner {
         if (feasible) {
           has_feasible = true;
           ++decisions[i].feasible_candidates;
-          if (best_fid == kInvalidFid || score > best_score ||
+          if (best_fid == InvalidFid() || score > best_score ||
               (score == best_score &&
                fragments[fid].secure_mem_used <
                    fragments[best_fid].secure_mem_used)) {
@@ -416,7 +416,7 @@ class PESPPrePartitioner {
       }
 
       for (auto dst_index : vertices[i].outgoing) {
-        if (assignments[dst_index] == kInvalidFid) {
+        if (assignments[dst_index] == InvalidFid()) {
           reverse_dependency[dst_index][best_fid] += 1.0;
         }
       }
