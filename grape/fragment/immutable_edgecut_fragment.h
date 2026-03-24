@@ -361,7 +361,7 @@ class ImmutableEdgecutFragment
       CHECK(io_adaptor->Write(&ovgid_[0], ovnum_ * sizeof(VID_T)));
     }
 
-    ia << vdata_;
+    ia << vdata_ << vsecret_;
     CHECK(io_adaptor->WriteArchive(ia));
     ia.Clear();
 
@@ -408,7 +408,7 @@ class ImmutableEdgecutFragment
     }
 
     CHECK(io_adaptor->ReadArchive(oa));
-    oa >> vdata_;
+    oa >> vdata_ >> vsecret_;
 
     io_adaptor->Close();
   }

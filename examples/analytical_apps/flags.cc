@@ -56,3 +56,27 @@ DEFINE_int32(app_concurrency, -1, "concurrency of application");
 DEFINE_string(lb, "cta",
               "Load balancing policy, these options can be used: "
               " none, cta, cm, wm, strict");
+
+DEFINE_bool(pesp_partition, false,
+            "whether to enable PESP pre-partitioning during graph loading.");
+DEFINE_double(pesp_w_base, 0.0, "base cost term used by the PESP scorer.");
+DEFINE_double(pesp_alpha, 4.0,
+              "weight of vertex privacy attribute cost in PESP.");
+DEFINE_double(pesp_beta, 0.5,
+              "weight of incoming-edge proxy cost in PESP.");
+DEFINE_double(pesp_gamma, 0.25,
+              "weight of degree penalty in PESP.");
+DEFINE_double(pesp_mu, 1.0,
+              "barrier coefficient for secure memory pressure in PESP.");
+DEFINE_double(pesp_omega, 1.0,
+              "global trade-off weight between affinity and load penalty.");
+DEFINE_double(pesp_secure_capacity, 10000.0,
+              "effective secure memory capacity used by the PESP barrier.");
+DEFINE_double(pesp_topology_weight, 1.0,
+              "weight of assigned-neighbor locality in PESP.");
+DEFINE_double(pesp_blueprint_weight, 1.0,
+              "weight of the blueprint placement hint in PESP.");
+DEFINE_double(pesp_reverse_weight, 1.0,
+              "weight of reverse dependency affinity in PESP.");
+DEFINE_string(pesp_output_prefix, "",
+              "optional directory used to dump PESP assignment diagnostics.");

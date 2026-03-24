@@ -25,6 +25,8 @@ limitations under the License.
 
 #include "grape/fragment/basic_fragment_loader.h"
 #include "grape/fragment/partitioner.h"
+#include "grape/fragment/pesp_prepartitioner.h"
+#include "grape/io/line_parser_utils.h"
 #include "grape/io/line_parser_base.h"
 #include "grape/io/local_io_adaptor.h"
 #include "grape/io/tsv_line_parser.h"
@@ -101,7 +103,7 @@ class EVFragmentLoader {
       io_adaptor->Open();
       std::string line;
       vdata_t v_data;
-      int32_t v_privacy;
+      int32_t v_privacy = 0;
       oid_t vertex_id;
       size_t line_no = 0;
       while (io_adaptor->ReadLine(line)) {
@@ -113,7 +115,8 @@ class EVFragmentLoader {
         if (line.empty() || line[0] == '#')
           continue;
         try {
-          line_parser_.LineParserForVFile(line, vertex_id, v_data, v_privacy);
+          ParseVertexLineWithPrivacy(line_parser_, line, vertex_id, v_data,
+                                     v_privacy);
         } catch (std::exception& e) {
           VLOG(1) << e.what();
           continue;
@@ -126,6 +129,17 @@ class EVFragmentLoader {
     }
 
     partitioner_t partitioner(comm_spec_.fnum(), id_list);
+    if (spec.pesp_config.enabled) {
+      CHECK(!vfile.empty()) << "PESP requires a vertex file.";
+      PESPPrePartitioner<oid_t, edata_t, IOADAPTOR_T, LINE_PARSER_T>
+          pre_partitioner(comm_spec_);
+      std::vector<fid_t> assignments = pre_partitioner.BuildAssignments(
+          efile, id_list, vprivacy_list, spec.directed, spec.pesp_config);
+      CHECK_EQ(assignments.size(), id_list.size());
+      for (size_t i = 0; i < id_list.size(); ++i) {
+        partitioner.SetPartitionId(id_list[i], assignments[i]);
+      }
+    }
 
     basic_fragment_loader_.SetPartitioner(std::move(partitioner));
 
@@ -146,7 +160,7 @@ class EVFragmentLoader {
       io_adaptor->Open();
       std::string line;
       edata_t e_data;
-      int32_t e_privacy;
+      int32_t e_privacy = 0;
       oid_t src, dst;
 
       size_t lineNo = 0;
@@ -160,7 +174,8 @@ class EVFragmentLoader {
           continue;
 
         try {
-          line_parser_.LineParserForEFile(line, src, dst, e_data);
+          ParseEdgeLineWithPrivacy(line_parser_, line, src, dst, e_data,
+                                   e_privacy);
         } catch (std::exception& e) {
           VLOG(1) << e.what();
           continue;

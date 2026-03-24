@@ -47,6 +47,7 @@ limitations under the License.
 #include "cuda/wcc/wcc.h"
 #include "cuda/wcc/wcc_opt.h"
 #include "flags.h"
+#include "load_graph_flags.h"
 #include "grape/cuda/fragment/host_fragment.h"
 #include "grape/cuda/worker/gpu_batch_shuffle_worker.h"
 #include "grape/cuda/worker/gpu_worker.h"
@@ -67,9 +68,8 @@ void Init() {
     LOG(FATAL) << "Please assign input edge files.";
   }
 
-  if (access(FLAGS_out_prefix.c_str(), 0) != 0) {
-    mkdir(FLAGS_out_prefix.c_str(), 0777);
-  }
+  grape::PrepareGraphOutputDirectories();
+  grape::ValidatePESPFlags();
 
   grape::InitMPIComm();
 }
@@ -147,14 +147,7 @@ void CreateAndQueryWithPreprocess(const grape::CommSpec& comm_spec,
   // using oid_t = typename FRAG_T::oid_t;
   timer_next("load graph");
   LoadGraphSpec graph_spec = DefaultLoadGraphSpec();
-
-  graph_spec.set_directed(FLAGS_directed);
-  graph_spec.set_rebalance(FLAGS_rebalance, FLAGS_rebalance_vertex_factor);
-  if (FLAGS_deserialize) {
-    graph_spec.set_deserialize(true, FLAGS_serialization_prefix);
-  } else if (FLAGS_serialize) {
-    graph_spec.set_serialize(true, FLAGS_serialization_prefix);
-  }
+  grape::ConfigureGraphSpec(graph_spec);
   if (FLAGS_segmented_partition) {
     using VERTEX_MAP_T =
         GlobalVertexMap<OID_T, VID_T, SegmentedPartitioner<OID_T>>;
@@ -212,14 +205,7 @@ void CreateAndQuery(const grape::CommSpec& comm_spec, const std::string& efile,
   // using oid_t = typename FRAG_T::oid_t;
   timer_next("load graph");
   LoadGraphSpec graph_spec = DefaultLoadGraphSpec();
-
-  graph_spec.set_directed(FLAGS_directed);
-  graph_spec.set_rebalance(FLAGS_rebalance, FLAGS_rebalance_vertex_factor);
-  if (FLAGS_deserialize) {
-    graph_spec.set_deserialize(true, FLAGS_serialization_prefix);
-  } else if (FLAGS_serialize) {
-    graph_spec.set_serialize(true, FLAGS_serialization_prefix);
-  }
+  grape::ConfigureGraphSpec(graph_spec);
   if (FLAGS_segmented_partition) {
     using VERTEX_MAP_T =
         GlobalVertexMap<OID_T, VID_T, SegmentedPartitioner<OID_T>>;

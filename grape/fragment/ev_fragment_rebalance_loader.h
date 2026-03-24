@@ -25,6 +25,7 @@ limitations under the License.
 
 #include "grape/fragment/basic_fragment_loader.h"
 #include "grape/fragment/partitioner.h"
+#include "grape/io/line_parser_utils.h"
 #include "grape/io/line_parser_base.h"
 #include "grape/io/local_io_adaptor.h"
 #include "grape/io/tsv_line_parser.h"
@@ -92,6 +93,7 @@ class EVFragmentRebalanceLoader {
 
     std::vector<oid_t> id_list;
     std::vector<vdata_t> vdata_list;
+    std::vector<int32_t> vprivacy_list;
 
     CHECK(!vfile.empty());
     {
@@ -99,6 +101,7 @@ class EVFragmentRebalanceLoader {
       io_adaptor->Open();
       std::string line;
       vdata_t v_data;
+      int32_t v_privacy = 0;
       oid_t vertex_id;
       size_t line_no = 0;
       while (io_adaptor->ReadLine(line)) {
@@ -110,13 +113,15 @@ class EVFragmentRebalanceLoader {
         if (line.empty() || line[0] == '#')
           continue;
         try {
-          line_parser_.LineParserForVFile(line, vertex_id, v_data);
+          ParseVertexLineWithPrivacy(line_parser_, line, vertex_id, v_data,
+                                     v_privacy);
         } catch (std::exception& e) {
           VLOG(1) << e.what();
           continue;
         }
         id_list.push_back(vertex_id);
         vdata_list.push_back(v_data);
+        vprivacy_list.push_back(v_privacy);
       }
       io_adaptor->Close();
     }
@@ -137,6 +142,7 @@ class EVFragmentRebalanceLoader {
 
     std::vector<vid_t> src_list, dst_list;
     std::vector<edata_t> edata_list;
+    std::vector<int32_t> eprivacy_list;
     {
       auto io_adaptor =
           std::unique_ptr<IOADAPTOR_T>(new IOADAPTOR_T(std::string(efile)));
@@ -145,6 +151,7 @@ class EVFragmentRebalanceLoader {
       io_adaptor->Open();
       std::string line;
       edata_t e_data;
+      int32_t e_privacy = 0;
       oid_t src, dst;
       vid_t src_gid, dst_gid;
 
@@ -159,7 +166,8 @@ class EVFragmentRebalanceLoader {
           continue;
 
         try {
-          line_parser_.LineParserForEFile(line, src, dst, e_data);
+          ParseEdgeLineWithPrivacy(line_parser_, line, src, dst, e_data,
+                                   e_privacy);
         } catch (std::exception& e) {
           VLOG(1) << e.what();
           continue;
@@ -171,6 +179,7 @@ class EVFragmentRebalanceLoader {
         src_list.push_back(src_gid);
         dst_list.push_back(dst_gid);
         edata_list.push_back(e_data);
+        eprivacy_list.push_back(e_privacy);
       }
       io_adaptor->Close();
     }
@@ -276,7 +285,7 @@ class EVFragmentRebalanceLoader {
 
     vm_ptr->UpdateToBalance(vnum_list, gid_map);
 
-    std::vector<ShuffleOut<vid_t, vid_t, edata_t>> edges_to_frag(fnum);
+    std::vector<ShuffleOut<vid_t, vid_t, edata_t, int32_t>> edges_to_frag(fnum);
     for (fid_t i = 0; i < fnum; ++i) {
       int worker_id = comm_spec_.FragToWorker(i);
       edges_to_frag[i].Init(comm_spec_.comm(), edge_tag, 4096000);
@@ -290,7 +299,7 @@ class EVFragmentRebalanceLoader {
     std::vector<Edge<vid_t, edata_t>> processed_edges;
 
     std::thread edge_recv_thread([&]() {
-      ShuffleIn<vid_t, vid_t, edata_t> data_in;
+      ShuffleIn<vid_t, vid_t, edata_t, int32_t> data_in;
       data_in.Init(comm_spec_.fnum(), comm_spec_.comm(), edge_tag);
       fid_t dst_fid;
       int src_worker_id;
@@ -301,8 +310,9 @@ class EVFragmentRebalanceLoader {
         }
         CHECK_EQ(dst_fid, comm_spec_.fid());
         auto& buffers = data_in.buffers();
-        foreach_rval(buffers, [&](vid_t&& src, vid_t&& dst, edata_t&& data) {
-          processed_edges.emplace_back(src, dst, std::move(data));
+        foreach_rval(buffers, [&](vid_t&& src, vid_t&& dst, edata_t&& data,
+                                  int32_t&& e_p) {
+          processed_edges.emplace_back(src, dst, std::move(data), e_p);
         });
         data_in.Clear();
       }
@@ -312,9 +322,11 @@ class EVFragmentRebalanceLoader {
     for (size_t i = 0; i < local_enum; ++i) {
       fid_t src_fid = vm_ptr->GetFidFromGid(src_list[i]);
       fid_t dst_fid = vm_ptr->GetFidFromGid(dst_list[i]);
-      edges_to_frag[src_fid].Emplace(src_list[i], dst_list[i], edata_list[i]);
+      edges_to_frag[src_fid].Emplace(src_list[i], dst_list[i], edata_list[i],
+                                     eprivacy_list[i]);
       if (src_fid != dst_fid) {
-        edges_to_frag[dst_fid].Emplace(src_list[i], dst_list[i], edata_list[i]);
+        edges_to_frag[dst_fid].Emplace(src_list[i], dst_list[i], edata_list[i],
+                                       eprivacy_list[i]);
       }
     }
 
@@ -325,8 +337,9 @@ class EVFragmentRebalanceLoader {
     edge_recv_thread.join();
     {
       auto& buffers = edges_to_frag[comm_spec_.fid()].buffers();
-      foreach_rval(buffers, [&](vid_t&& src, vid_t&& dst, edata_t&& data) {
-        processed_edges.emplace_back(src, dst, std::move(data));
+      foreach_rval(buffers, [&](vid_t&& src, vid_t&& dst, edata_t&& data,
+                                int32_t&& e_p) {
+        processed_edges.emplace_back(src, dst, std::move(data), e_p);
       });
     }
 
@@ -337,7 +350,7 @@ class EVFragmentRebalanceLoader {
         CHECK(vm_ptr->GetGid(id_list[i], gid));
         fid_t fid = vm_ptr->GetFidFromGid(gid);
         if (fid == comm_spec_.fid()) {
-          processed_vertices.emplace_back(gid, vdata_list[i]);
+          processed_vertices.emplace_back(gid, vdata_list[i], vprivacy_list[i]);
         }
       }
     }
@@ -352,6 +365,7 @@ class EVFragmentRebalanceLoader {
         if (fragment->GetVertex(id_list[i], v)) {
           if (fragment->IsOuterVertex(v)) {
             fragment->SetData(v, vdata_list[i]);
+            fragment->SetSecret(v, vprivacy_list[i]);
           }
         }
       }

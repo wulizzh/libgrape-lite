@@ -137,25 +137,25 @@ struct Edge<VID_T, EmptyType> {
 
 template <typename VID_T, typename EDATA_T>
 InArchive& operator<<(InArchive& archive, const Edge<VID_T, EDATA_T>& e) {
-  archive << e.src << e.dst << e.edata;
+  archive << e.src << e.dst << e.edata << e.secret;
   return archive;
 }
 
 template <typename VID_T, typename EDATA_T>
 OutArchive& operator>>(OutArchive& archive, Edge<VID_T, EDATA_T>& e) {
-  archive >> e.src >> e.dst >> e.edata;
+  archive >> e.src >> e.dst >> e.edata >> e.secret;
   return archive;
 }
 
 template <typename VID_T>
 InArchive& operator<<(InArchive& archive, const Edge<VID_T, EmptyType>& e) {
-  archive << e.src << e.dst;
+  archive << e.src << e.dst << e.secret;
   return archive;
 }
 
 template <typename VID_T>
 OutArchive& operator>>(OutArchive& archive, Edge<VID_T, EmptyType>& e) {
-  archive >> e.src >> e.dst;
+  archive >> e.src >> e.dst >> e.secret;
   return archive;
 }
 

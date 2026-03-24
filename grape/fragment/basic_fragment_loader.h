@@ -28,6 +28,7 @@ limitations under the License.
 
 #include "grape/communication/shuffle.h"
 #include "grape/config.h"
+#include "grape/fragment/pesp_config.h"
 #include "grape/graph/edge.h"
 #include "grape/graph/vertex.h"
 #include "grape/util.h"
@@ -51,6 +52,7 @@ struct LoadGraphSpec {
 
   bool deserialize;
   std::string deserialization_prefix;
+  PESPConfig pesp_config;
 
   void set_directed(bool val = true) { directed = val; }
   void set_rebalance(bool flag, int weight) {
@@ -67,6 +69,8 @@ struct LoadGraphSpec {
     deserialize = flag;
     deserialization_prefix = prefix;
   }
+
+  void set_pesp(const PESPConfig& config) { pesp_config = config; }
 };
 
 inline LoadGraphSpec DefaultLoadGraphSpec() {
@@ -76,6 +80,7 @@ inline LoadGraphSpec DefaultLoadGraphSpec() {
   spec.rebalance_vertex_factor = 0;
   spec.serialize = false;
   spec.deserialize = false;
+  spec.pesp_config = DefaultPESPConfig();
   return spec;
 }
 

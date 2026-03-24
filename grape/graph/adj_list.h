@@ -125,26 +125,26 @@ struct Nbr<VID_T, EmptyType> {
 template <typename VID_T, typename EDATA_T>
 inline InArchive& operator<<(InArchive& archive,
                              const Nbr<VID_T, EDATA_T>& nbr) {
-  archive << nbr.neighbor << nbr.data;
+  archive << nbr.neighbor << nbr.data << nbr.secret;
   return archive;
 }
 
 template <typename VID_T>
 inline InArchive& operator<<(InArchive& archive,
                              const Nbr<VID_T, EmptyType>& nbr) {
-  archive << nbr.neighbor;
+  archive << nbr.neighbor << nbr.secret;
   return archive;
 }
 
 template <typename VID_T, typename EDATA_T>
 inline OutArchive& operator>>(OutArchive& archive, Nbr<VID_T, EDATA_T>& nbr) {
-  archive >> nbr.neighbor >> nbr.data;
+  archive >> nbr.neighbor >> nbr.data >> nbr.secret;
   return archive;
 }
 
 template <typename VID_T>
 inline OutArchive& operator>>(OutArchive& archive, Nbr<VID_T, EmptyType>& nbr) {
-  archive >> nbr.neighbor;
+  archive >> nbr.neighbor >> nbr.secret;
   return archive;
 }
 

@@ -49,4 +49,17 @@ DECLARE_string(serialization_prefix);
 DECLARE_int32(app_concurrency);
 
 DECLARE_string(lb);
+
+DECLARE_bool(pesp_partition);
+DECLARE_double(pesp_w_base);
+DECLARE_double(pesp_alpha);
+DECLARE_double(pesp_beta);
+DECLARE_double(pesp_gamma);
+DECLARE_double(pesp_mu);
+DECLARE_double(pesp_omega);
+DECLARE_double(pesp_secure_capacity);
+DECLARE_double(pesp_topology_weight);
+DECLARE_double(pesp_blueprint_weight);
+DECLARE_double(pesp_reverse_weight);
+DECLARE_string(pesp_output_prefix);
 #endif  // EXAMPLES_ANALYTICAL_APPS_FLAGS_H_

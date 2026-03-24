@@ -31,6 +31,7 @@ limitations under the License.
 
 #include <grape/fragment/immutable_edgecut_fragment.h>
 #include <grape/fragment/loader.h>
+#include <grape/fragment/pesp_config.h>
 #include <grape/grape.h>
 #include <grape/util.h>
 #include <grape/vertex_map/global_vertex_map.h>
@@ -46,6 +47,7 @@ limitations under the License.
 #include "cdlp/cdlp_selective.h"//添加新算法
 #include "jaccard/jaccard.h"
 #include "flags.h"
+#include "load_graph_flags.h"
 #include "lcc/lcc.h"
 #include "lcc/lcc_auto.h"
 #include "pagerank/pagerank.h"
@@ -76,9 +78,8 @@ void Init() {
                   "Please assign vertex files or use Hash Partitioner";
   }
 
-  if (!FLAGS_out_prefix.empty() && access(FLAGS_out_prefix.c_str(), 0) != 0) {
-    mkdir(FLAGS_out_prefix.c_str(), 0777);
-  }
+  PrepareGraphOutputDirectories();
+  ValidatePESPFlags();
 
   InitMPIComm();
   CommSpec comm_spec;
@@ -128,13 +129,7 @@ void CreateAndQuery(const CommSpec& comm_spec, const std::string& out_prefix,
                     int fnum, const ParallelEngineSpec& spec, Args... args) {
   timer_next("load graph");
   LoadGraphSpec graph_spec = DefaultLoadGraphSpec();
-  graph_spec.set_directed(FLAGS_directed);
-  graph_spec.set_rebalance(FLAGS_rebalance, FLAGS_rebalance_vertex_factor);
-  if (FLAGS_deserialize) {
-    graph_spec.set_deserialize(true, FLAGS_serialization_prefix);
-  } else if (FLAGS_serialize) {
-    graph_spec.set_serialize(true, FLAGS_serialization_prefix);
-  }
+  ConfigureGraphSpec(graph_spec);
   if (FLAGS_segmented_partition) {
     using VertexMapType =
         GlobalVertexMap<OID_T, VID_T, SegmentedPartitioner<OID_T>>;

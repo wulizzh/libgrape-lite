@@ -57,13 +57,7 @@ void RunUndirectedPageRankOpt(const CommSpec& comm_spec,
                               int mr) {
   timer_next("load graph");
   LoadGraphSpec graph_spec = DefaultLoadGraphSpec();
-  graph_spec.set_directed(FLAGS_directed);
-  graph_spec.set_rebalance(FLAGS_rebalance, FLAGS_rebalance_vertex_factor);
-  if (FLAGS_deserialize) {
-    graph_spec.set_deserialize(true, FLAGS_serialization_prefix);
-  } else if (FLAGS_serialize) {
-    graph_spec.set_serialize(true, FLAGS_serialization_prefix);
-  }
+  ConfigureGraphSpec(graph_spec);
   if (FLAGS_segmented_partition) {
     using VertexMapType =
         GlobalVertexMap<int64_t, uint32_t, SegmentedPartitioner<int64_t>>;
@@ -191,13 +185,7 @@ void RunDirectedCDLP(const CommSpec& comm_spec, const std::string& out_prefix,
                      const ParallelEngineSpec& spec) {
   timer_next("load graph");
   LoadGraphSpec graph_spec = DefaultLoadGraphSpec();
-  graph_spec.set_directed(FLAGS_directed);
-  graph_spec.set_rebalance(FLAGS_rebalance, FLAGS_rebalance_vertex_factor);
-  if (FLAGS_deserialize) {
-    graph_spec.set_deserialize(true, FLAGS_serialization_prefix);
-  } else if (FLAGS_serialize) {
-    graph_spec.set_serialize(true, FLAGS_serialization_prefix);
-  }
+  ConfigureGraphSpec(graph_spec);
 
   using FRAG_T = ImmutableEdgecutFragment<int64_t, uint32_t, EmptyType,
                                           EmptyType, LoadStrategy::kOnlyOut>;
@@ -224,13 +212,7 @@ void RunUndirectedCDLP(const CommSpec& comm_spec, const std::string& out_prefix,
                        const ParallelEngineSpec& spec) {
   timer_next("load graph");
   LoadGraphSpec graph_spec = DefaultLoadGraphSpec();
-  graph_spec.set_directed(FLAGS_directed);
-  graph_spec.set_rebalance(FLAGS_rebalance, FLAGS_rebalance_vertex_factor);
-  if (FLAGS_deserialize) {
-    graph_spec.set_deserialize(true, FLAGS_serialization_prefix);
-  } else if (FLAGS_serialize) {
-    graph_spec.set_serialize(true, FLAGS_serialization_prefix);
-  }
+  ConfigureGraphSpec(graph_spec);
 
   using VertexMapType =
       GlobalVertexMap<int64_t, uint32_t, SegmentedPartitioner<int64_t>>;
@@ -278,13 +260,7 @@ void CreateAndQueryOpt(const CommSpec& comm_spec, const std::string& out_prefix,
                        const ParallelEngineSpec& spec, Args... args) {
   timer_next("load graph");
   LoadGraphSpec graph_spec = DefaultLoadGraphSpec();
-  graph_spec.set_directed(FLAGS_directed);
-  graph_spec.set_rebalance(FLAGS_rebalance, FLAGS_rebalance_vertex_factor);
-  if (FLAGS_deserialize) {
-    graph_spec.set_deserialize(true, FLAGS_serialization_prefix);
-  } else if (FLAGS_serialize) {
-    graph_spec.set_serialize(true, FLAGS_serialization_prefix);
-  }
+  ConfigureGraphSpec(graph_spec);
   if (FLAGS_segmented_partition) {
     using VertexMapType =
         GlobalVertexMap<int64_t, uint32_t, SegmentedPartitioner<int64_t>>;

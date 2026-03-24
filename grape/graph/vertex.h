@@ -109,28 +109,28 @@ struct Vertex<VID_T, EmptyType> {
 template <typename VID_T, typename VDATA_T>
 InArchive& operator<<(InArchive& archive,
                       const internal::Vertex<VID_T, VDATA_T>& v) {
-  archive << v.vid << v.vdata;
+  archive << v.vid << v.vdata << v.secret;
   return archive;
 }
 
 template <typename VID_T, typename VDATA_T>
 OutArchive& operator>>(OutArchive& archive,
                        internal::Vertex<VID_T, VDATA_T>& v) {
-  archive >> v.vid >> v.vdata;
+  archive >> v.vid >> v.vdata >> v.secret;
   return archive;
 }
 
 template <typename VID_T>
 InArchive& operator<<(InArchive& archive,
                       const internal::Vertex<VID_T, EmptyType>& v) {
-  archive << v.vid;
+  archive << v.vid << v.secret;
   return archive;
 }
 
 template <typename VID_T>
 OutArchive& operator>>(OutArchive& archive,
                        internal::Vertex<VID_T, EmptyType>& v) {
-  archive >> v.vid;
+  archive >> v.vid >> v.secret;
   return archive;
 }
 
