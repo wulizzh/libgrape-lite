@@ -62,4 +62,6 @@ DECLARE_double(pesp_topology_weight);
 DECLARE_double(pesp_blueprint_weight);
 DECLARE_double(pesp_reverse_weight);
 DECLARE_string(pesp_output_prefix);
+DECLARE_bool(partition_report);
+DECLARE_string(partition_output_prefix);
 #endif  // EXAMPLES_ANALYTICAL_APPS_FLAGS_H_

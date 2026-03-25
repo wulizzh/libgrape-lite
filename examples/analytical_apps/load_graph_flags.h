@@ -41,6 +41,10 @@ inline void PrepareGraphOutputDirectories() {
   if (FLAGS_pesp_partition && !FLAGS_pesp_output_prefix.empty()) {
     EnsureDirectoryIfNeeded(FLAGS_pesp_output_prefix);
   }
+  if (FLAGS_partition_report && !FLAGS_partition_output_prefix.empty() &&
+      FLAGS_partition_output_prefix != ".") {
+    EnsureDirectoryIfNeeded(FLAGS_partition_output_prefix);
+  }
 }
 
 inline void ValidatePESPFlags() {
@@ -76,6 +80,31 @@ inline PESPConfig BuildPESPConfigFromFlags() {
                              ? FLAGS_out_prefix
                              : FLAGS_pesp_output_prefix;
   return config;
+}
+
+inline bool PartitionReportEnabled() { return FLAGS_partition_report; }
+
+inline std::string GetPartitionStrategyName() {
+  if (FLAGS_pesp_partition) {
+    return "pesp";
+  }
+  if (FLAGS_segmented_partition) {
+    return "segmented";
+  }
+  return "hash";
+}
+
+inline std::string GetPartitionOutputPrefix() {
+  if (!FLAGS_partition_output_prefix.empty()) {
+    return FLAGS_partition_output_prefix;
+  }
+  if (FLAGS_pesp_partition && !FLAGS_pesp_output_prefix.empty()) {
+    return FLAGS_pesp_output_prefix;
+  }
+  if (!FLAGS_out_prefix.empty()) {
+    return FLAGS_out_prefix;
+  }
+  return ".";
 }
 
 inline void ConfigureGraphSpec(LoadGraphSpec& graph_spec) {

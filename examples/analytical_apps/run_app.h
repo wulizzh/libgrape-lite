@@ -56,6 +56,7 @@ limitations under the License.
 #include "pagerank/pagerank_local_parallel.h"
 #include "pagerank/pagerank_parallel.h"
 #include "pagerank/pagerank_push.h"
+#include "partition_reporter.h"
 #include "sssp/sssp.h"
 #include "sssp/sssp_auto.h"
 #include "timer.h"
@@ -98,6 +99,10 @@ template <typename FRAG_T, typename APP_T, typename... Args>
 void DoQuery(std::shared_ptr<FRAG_T> fragment, std::shared_ptr<APP_T> app,
              const CommSpec& comm_spec, const ParallelEngineSpec& spec,
              const std::string& out_prefix, Args... args) {
+  if (PartitionReportEnabled()) {
+    timer_next("partition report");
+    MaybeReportPartitionLayout(*fragment, comm_spec);
+  }
   timer_next("load application");
   auto worker = APP_T::CreateWorker(app, fragment);
   worker->Init(comm_spec, spec);

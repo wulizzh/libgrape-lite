@@ -78,5 +78,10 @@ DEFINE_double(pesp_blueprint_weight, 1.0,
               "weight of the blueprint placement hint in PESP.");
 DEFINE_double(pesp_reverse_weight, 1.0,
               "weight of reverse dependency affinity in PESP.");
+DEFINE_bool(partition_report, false,
+            "whether to emit unified partition metrics and assignment files.");
+DEFINE_string(partition_output_prefix, "",
+              "directory for partition report outputs; defaults to "
+              "pesp_output_prefix, out_prefix, or current directory.");
 DEFINE_string(pesp_output_prefix, "",
               "optional directory used to dump PESP assignment diagnostics.");
