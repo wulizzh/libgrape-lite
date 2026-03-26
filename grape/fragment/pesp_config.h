@@ -22,16 +22,19 @@ namespace grape {
 
 struct PESPConfig {
   bool enabled = false;
-  double base_cost = 0.0;
-  double alpha = 4.0;
-  double beta = 0.5;
+  double base_cost = 1.0;
+  double alpha = 0.35;
+  double beta = 0.40;
   double gamma = 0.25;
+  double budget_lambda = 1.2;
   double mu = 1.0;
   double omega = 1.0;
-  double secure_capacity = 10000.0;
+  double secure_capacity = 0.0;
   double topology_weight = 1.0;
   double blueprint_weight = 1.0;
   double reverse_weight = 1.0;
+  double eta_public = 1.0;
+  double eta_private = 1.2;
   std::string output_prefix;
 };
 

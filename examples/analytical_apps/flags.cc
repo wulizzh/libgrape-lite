@@ -59,25 +59,34 @@ DEFINE_string(lb, "cta",
 
 DEFINE_bool(pesp_partition, false,
             "whether to enable PESP pre-partitioning during graph loading.");
-DEFINE_double(pesp_w_base, 0.0, "base cost term used by the PESP scorer.");
-DEFINE_double(pesp_alpha, 4.0,
+DEFINE_double(pesp_w_base, 1.0, "base cost term used by the PESP scorer.");
+DEFINE_double(pesp_alpha, 0.35,
               "weight of vertex privacy attribute cost in PESP.");
-DEFINE_double(pesp_beta, 0.5,
+DEFINE_double(pesp_beta, 0.40,
               "weight of incoming-edge proxy cost in PESP.");
 DEFINE_double(pesp_gamma, 0.25,
               "weight of degree penalty in PESP.");
+DEFINE_double(pesp_budget_lambda, 1.2,
+              "slack coefficient used to derive the unit security budget "
+              "from average private-load statistics.");
 DEFINE_double(pesp_mu, 1.0,
               "barrier coefficient for secure memory pressure in PESP.");
 DEFINE_double(pesp_omega, 1.0,
               "global trade-off weight between affinity and load penalty.");
-DEFINE_double(pesp_secure_capacity, 10000.0,
-              "effective secure memory capacity used by the PESP barrier.");
+DEFINE_double(pesp_secure_capacity, 0.0,
+              "optional explicit effective security budget override; "
+              "non-positive values enable data-driven budget derivation.");
 DEFINE_double(pesp_topology_weight, 1.0,
               "weight of assigned-neighbor locality in PESP.");
 DEFINE_double(pesp_blueprint_weight, 1.0,
               "weight of the blueprint placement hint in PESP.");
 DEFINE_double(pesp_reverse_weight, 1.0,
               "weight of reverse dependency affinity in PESP.");
+DEFINE_double(pesp_eta_public, 1.0,
+              "topology affinity factor applied to public vertices.");
+DEFINE_double(pesp_eta_private, 1.2,
+              "topology affinity factor applied to privacy-sensitive "
+              "vertices.");
 DEFINE_bool(partition_report, false,
             "whether to emit unified partition metrics and assignment files.");
 DEFINE_string(partition_output_prefix, "",

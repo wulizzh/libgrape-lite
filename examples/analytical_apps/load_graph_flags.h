@@ -70,12 +70,15 @@ inline PESPConfig BuildPESPConfigFromFlags() {
   config.alpha = FLAGS_pesp_alpha;
   config.beta = FLAGS_pesp_beta;
   config.gamma = FLAGS_pesp_gamma;
+  config.budget_lambda = FLAGS_pesp_budget_lambda;
   config.mu = FLAGS_pesp_mu;
   config.omega = FLAGS_pesp_omega;
   config.secure_capacity = FLAGS_pesp_secure_capacity;
   config.topology_weight = FLAGS_pesp_topology_weight;
   config.blueprint_weight = FLAGS_pesp_blueprint_weight;
   config.reverse_weight = FLAGS_pesp_reverse_weight;
+  config.eta_public = FLAGS_pesp_eta_public;
+  config.eta_private = FLAGS_pesp_eta_private;
   config.output_prefix = FLAGS_pesp_output_prefix.empty()
                              ? FLAGS_out_prefix
                              : FLAGS_pesp_output_prefix;

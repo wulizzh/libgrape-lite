@@ -83,7 +83,9 @@ class PESPPrePartitioner {
     double mem_before = 0.0;
     double mem_after = 0.0;
     double affinity = 0.0;
+    double normalized_affinity = 0.0;
     double delta_load = 0.0;
+    double normalized_delta_load = 0.0;
     double score = 0.0;
   };
 
@@ -92,7 +94,9 @@ class PESPPrePartitioner {
     fid_t selected_fid = 0;
     bool forced_fallback = false;
     double selected_affinity = 0.0;
+    double selected_normalized_affinity = 0.0;
     double selected_delta_load = 0.0;
+    double selected_normalized_delta_load = 0.0;
     double selected_score = 0.0;
     double selected_mem_before = 0.0;
     double selected_mem_after = 0.0;
@@ -111,18 +115,29 @@ class PESPPrePartitioner {
     return std::max(cost, 0.0);
   }
 
-  static double Barrier(double mem, const PESPConfig& config) {
-    if (config.secure_capacity <= 0.0) {
+  static double UnitSecurityLoadDelta(const VertexState& state) {
+    return state.is_private ? 1.0 : 0.0;
+  }
+
+  static double DeriveEffectiveBudget(size_t private_vertex_count, fid_t fnum,
+                                      const PESPConfig& config) {
+    if (config.secure_capacity > 0.0) {
+      return config.secure_capacity;
+    }
+    if (fnum == 0) {
       return 0.0;
     }
-    if (mem >= config.secure_capacity) {
-      return std::numeric_limits<double>::infinity();
+    return config.budget_lambda *
+           static_cast<double>(private_vertex_count) / static_cast<double>(fnum);
+  }
+
+  static double Barrier(double load, double effective_budget,
+                        const PESPConfig& config) {
+    if (effective_budget <= 0.0) {
+      return 0.0;
     }
-    double remain = config.secure_capacity - mem;
-    if (remain <= 1e-9) {
-      return std::numeric_limits<double>::infinity();
-    }
-    return config.mu * mem / remain;
+    double excess = std::max(0.0, load - effective_budget);
+    return config.mu * (excess / effective_budget);
   }
 
   double Affinity(size_t vertex_index, fid_t fid,
@@ -143,7 +158,10 @@ class PESPPrePartitioner {
       affinity += config.blueprint_weight;
     }
     affinity += config.reverse_weight * reverse_dependency[vertex_index][fid];
-    return affinity;
+    double privacy_factor = vertices[vertex_index].is_private
+                                ? config.eta_private
+                                : config.eta_public;
+    return privacy_factor * affinity;
   }
 
   std::vector<fid_t> BuildBlueprint(const std::vector<VertexState>& vertices,
@@ -230,7 +248,8 @@ class PESPPrePartitioner {
                        const std::vector<FragmentState>& fragments,
                        const std::vector<DecisionTrace>& decisions,
                        const std::vector<std::vector<CandidateTrace>>& traces,
-                       const PESPConfig& config) const {
+                       const PESPConfig& config,
+                       double effective_budget) const {
     if (config.output_prefix.empty()) {
       return;
     }
@@ -241,8 +260,10 @@ class PESPPrePartitioner {
       assignment_out
           << "vertex_index\tvertex_id\tfragment_id\tis_private\tcost\t"
              "in_degree\tout_degree\tprivate_in_degree\tblueprint_fid\t"
-             "forced_fallback\tselected_affinity\tselected_delta_load\t"
-             "selected_score\tselected_mem_before\tselected_mem_after\t"
+             "forced_fallback\tselected_affinity\t"
+             "selected_normalized_affinity\tselected_delta_load\t"
+             "selected_normalized_delta_load\tselected_score\t"
+             "selected_mem_before\tselected_mem_after\t"
              "feasible_candidates\n";
       for (size_t i = 0; i < id_list.size(); ++i) {
         assignment_out << i << "\t" << id_list[i] << "\t" << assignments[i]
@@ -253,7 +274,9 @@ class PESPPrePartitioner {
                        << decisions[i].blueprint_fid << "\t"
                        << (decisions[i].forced_fallback ? 1 : 0) << "\t"
                        << decisions[i].selected_affinity << "\t"
+                       << decisions[i].selected_normalized_affinity << "\t"
                        << decisions[i].selected_delta_load << "\t"
+                       << decisions[i].selected_normalized_delta_load << "\t"
                        << decisions[i].selected_score << "\t"
                        << decisions[i].selected_mem_before << "\t"
                        << decisions[i].selected_mem_after << "\t"
@@ -267,12 +290,14 @@ class PESPPrePartitioner {
     std::ofstream stats_out(stats_path);
     if (stats_out.good()) {
       stats_out << "fragment_id\tvertex_count\tprivate_vertex_count\t"
-                   "secure_mem_used\tsecure_load\n";
+                   "unit_security_load\tentropy_cost_sum\t"
+                   "effective_budget\n";
       for (size_t i = 0; i < fragments.size(); ++i) {
         stats_out << i << "\t" << fragments[i].vertex_count << "\t"
                   << fragments[i].private_vertex_count << "\t"
                   << fragments[i].secure_mem_used << "\t"
-                  << fragments[i].secure_load << "\n";
+                  << fragments[i].secure_load << "\t" << effective_budget
+                  << "\n";
       }
     } else {
       VLOG(1) << "Failed to write PESP stats file: " << stats_path;
@@ -283,8 +308,9 @@ class PESPPrePartitioner {
     if (trace_out.good()) {
       trace_out << "vertex_index\tvertex_id\tblueprint_fid\t"
                    "private_in_degree\tvertex_cost\tcandidate_fid\tselected\t"
-                   "feasible\tmem_before\tmem_after\taffinity\tdelta_load\t"
-                   "score\n";
+                   "feasible\tload_before\tload_after\taffinity\t"
+                   "normalized_affinity\tdelta_load\t"
+                   "normalized_delta_load\tscore\n";
       for (size_t i = 0; i < id_list.size(); ++i) {
         for (auto& trace : traces[i]) {
           trace_out << i << "\t" << id_list[i] << "\t"
@@ -294,7 +320,10 @@ class PESPPrePartitioner {
                     << (trace.fid == decisions[i].selected_fid ? 1 : 0) << "\t"
                     << (trace.feasible ? 1 : 0) << "\t" << trace.mem_before
                     << "\t" << trace.mem_after << "\t" << trace.affinity
-                    << "\t" << trace.delta_load << "\t" << trace.score << "\n";
+                    << "\t" << trace.normalized_affinity << "\t"
+                    << trace.delta_load << "\t"
+                    << trace.normalized_delta_load << "\t" << trace.score
+                    << "\n";
         }
       }
     } else {
@@ -339,6 +368,8 @@ class PESPPrePartitioner {
         total_private_in_degree += vertex.private_in_degree;
         total_cost += vertex.cost;
       }
+      double effective_budget =
+          DeriveEffectiveBudget(private_vertex_count, fnum, config);
       std::cout << "[PESP] start pre-partitioning: vertices=" << vertex_num
                 << ", private_vertices=" << private_vertex_count
                 << ", directed=" << directed
@@ -347,12 +378,16 @@ class PESPPrePartitioner {
                 << ", total_cost=" << total_cost << std::endl;
       std::cout << "[PESP] config: base_cost=" << config.base_cost
                 << ", alpha=" << config.alpha << ", beta=" << config.beta
-                << ", gamma=" << config.gamma << ", mu=" << config.mu
-                << ", omega=" << config.omega
-                << ", secure_capacity=" << config.secure_capacity
+                << ", gamma=" << config.gamma
+                << ", budget_lambda=" << config.budget_lambda
+                << ", mu=" << config.mu << ", omega=" << config.omega
+                << ", secure_capacity_override=" << config.secure_capacity
+                << ", effective_budget=" << effective_budget
                 << ", topology_weight=" << config.topology_weight
                 << ", blueprint_weight=" << config.blueprint_weight
-                << ", reverse_weight=" << config.reverse_weight << std::endl;
+                << ", reverse_weight=" << config.reverse_weight
+                << ", eta_public=" << config.eta_public
+                << ", eta_private=" << config.eta_private << std::endl;
     }
 
     std::vector<fid_t> blueprint = BuildBlueprint(vertices, fnum);
@@ -382,6 +417,14 @@ class PESPPrePartitioner {
     std::vector<std::vector<CandidateTrace>> traces(vertex_num);
     size_t forced_fallback_count = 0;
     size_t progress_stride = std::max(static_cast<size_t>(1), vertex_num / 10);
+    size_t total_private_vertices = 0;
+    for (auto& vertex : vertices) {
+      if (vertex.is_private) {
+        ++total_private_vertices;
+      }
+    }
+    double effective_budget =
+        DeriveEffectiveBudget(total_private_vertices, fnum, config);
 
     for (size_t i = 0; i < vertex_num; ++i) {
       fid_t best_fid = InvalidFid();
@@ -389,50 +432,78 @@ class PESPPrePartitioner {
       bool has_feasible = false;
       decisions[i].blueprint_fid = blueprint[i];
       traces[i].reserve(fnum);
+      std::vector<double> raw_affinity(static_cast<size_t>(fnum), 0.0);
+      std::vector<double> raw_delta_load(static_cast<size_t>(fnum), 0.0);
+      std::vector<double> current_load(static_cast<size_t>(fnum), 0.0);
+      std::vector<double> next_load(static_cast<size_t>(fnum), 0.0);
+      double min_affinity = std::numeric_limits<double>::infinity();
+      double max_affinity = -std::numeric_limits<double>::infinity();
+      double min_delta = std::numeric_limits<double>::infinity();
+      double max_delta = -std::numeric_limits<double>::infinity();
 
       for (fid_t fid = 0; fid < fnum; ++fid) {
         double current_mem = fragments[fid].secure_mem_used;
-        double next_mem = current_mem + vertices[i].cost;
-        bool feasible =
-            (config.secure_capacity <= 0.0 || next_mem < config.secure_capacity);
-        double before = Barrier(fragments[fid].secure_mem_used, config);
-        double after = Barrier(next_mem, config);
+        double next_mem = current_mem + UnitSecurityLoadDelta(vertices[i]);
+        double before = Barrier(fragments[fid].secure_mem_used, effective_budget,
+                                config);
+        double after = Barrier(next_mem, effective_budget, config);
         double delta_load = vertices[i].cost;
-        if (std::isfinite(before) && std::isfinite(after)) {
-          delta_load += (after - before);
-        } else {
-          delta_load = std::numeric_limits<double>::infinity();
-        }
-
         double affinity = Affinity(i, fid, assignments, vertices, blueprint,
                                    reverse_dependency, config);
-        double score = affinity - config.omega * delta_load;
+        delta_load += (after - before);
+        size_t idx = static_cast<size_t>(fid);
+        raw_affinity[idx] = affinity;
+        raw_delta_load[idx] = delta_load;
+        current_load[idx] = current_mem;
+        next_load[idx] = next_mem;
+        min_affinity = std::min(min_affinity, affinity);
+        max_affinity = std::max(max_affinity, affinity);
+        min_delta = std::min(min_delta, delta_load);
+        max_delta = std::max(max_delta, delta_load);
+      }
+
+      for (fid_t fid = 0; fid < fnum; ++fid) {
+        size_t idx = static_cast<size_t>(fid);
+        double normalized_affinity = 0.0;
+        if (max_affinity > min_affinity) {
+          normalized_affinity =
+              (raw_affinity[idx] - min_affinity) / (max_affinity - min_affinity);
+        }
+        double normalized_delta_load = 0.0;
+        if (max_delta > min_delta) {
+          normalized_delta_load =
+              (raw_delta_load[idx] - min_delta) / (max_delta - min_delta);
+        }
+        double score =
+            normalized_affinity - config.omega * normalized_delta_load;
 
         CandidateTrace candidate_trace;
         candidate_trace.fid = fid;
-        candidate_trace.feasible = feasible;
-        candidate_trace.mem_before = current_mem;
-        candidate_trace.mem_after = next_mem;
-        candidate_trace.affinity = affinity;
-        candidate_trace.delta_load = delta_load;
+        candidate_trace.feasible = true;
+        candidate_trace.mem_before = current_load[idx];
+        candidate_trace.mem_after = next_load[idx];
+        candidate_trace.affinity = raw_affinity[idx];
+        candidate_trace.normalized_affinity = normalized_affinity;
+        candidate_trace.delta_load = raw_delta_load[idx];
+        candidate_trace.normalized_delta_load = normalized_delta_load;
         candidate_trace.score = score;
         traces[i].push_back(candidate_trace);
 
-        if (feasible) {
-          has_feasible = true;
-          ++decisions[i].feasible_candidates;
-          if (best_fid == InvalidFid() || score > best_score ||
-              (score == best_score &&
-               fragments[fid].secure_mem_used <
-                   fragments[best_fid].secure_mem_used)) {
-            best_score = score;
-            best_fid = fid;
-            decisions[i].selected_affinity = affinity;
-            decisions[i].selected_delta_load = delta_load;
-            decisions[i].selected_score = score;
-            decisions[i].selected_mem_before = current_mem;
-            decisions[i].selected_mem_after = next_mem;
-          }
+        has_feasible = true;
+        ++decisions[i].feasible_candidates;
+        if (best_fid == InvalidFid() || score > best_score ||
+            (score == best_score &&
+             current_load[idx] <
+                 current_load[static_cast<size_t>(best_fid)])) {
+          best_score = score;
+          best_fid = fid;
+          decisions[i].selected_affinity = raw_affinity[idx];
+          decisions[i].selected_normalized_affinity = normalized_affinity;
+          decisions[i].selected_delta_load = raw_delta_load[idx];
+          decisions[i].selected_normalized_delta_load = normalized_delta_load;
+          decisions[i].selected_score = score;
+          decisions[i].selected_mem_before = current_load[idx];
+          decisions[i].selected_mem_after = next_load[idx];
         }
       }
 
@@ -457,7 +528,7 @@ class PESPPrePartitioner {
 
       assignments[i] = best_fid;
       decisions[i].selected_fid = best_fid;
-      fragments[best_fid].secure_mem_used += vertices[i].cost;
+      fragments[best_fid].secure_mem_used += UnitSecurityLoadDelta(vertices[i]);
       fragments[best_fid].secure_load += vertices[i].cost;
       ++fragments[best_fid].vertex_count;
       if (vertices[i].is_private) {
@@ -493,8 +564,9 @@ class PESPPrePartitioner {
                   << "] vertex_count=" << fragments[fid].vertex_count
                   << ", private_vertex_count="
                   << fragments[fid].private_vertex_count
-                  << ", secure_mem_used=" << fragments[fid].secure_mem_used
-                  << ", secure_load=" << fragments[fid].secure_load
+                  << ", unit_security_load=" << fragments[fid].secure_mem_used
+                  << ", entropy_cost_sum=" << fragments[fid].secure_load
+                  << ", effective_budget=" << effective_budget
                   << std::endl;
       }
       std::cout << "[PESP] assignment completed: forced_fallback_count="
@@ -502,7 +574,7 @@ class PESPPrePartitioner {
     }
 
     DumpDiagnostics(id_list, assignments, vertices, fragments, decisions,
-                    traces, config);
+                    traces, config, effective_budget);
     return assignments;
   }
 
