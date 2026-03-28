@@ -171,7 +171,7 @@ class SSSPContext : public VertexDataContext<FRAG_T, double> {
     runtime_stats.emplace_back(stat);
   }
 
-  void DumpRuntimeStats() const {
+  void DumpRuntimeStats() {
     auto& frag = this->fragment();
     std::string prefix = FLAGS_out_prefix.empty() ? "." : FLAGS_out_prefix;
     std::string path =
