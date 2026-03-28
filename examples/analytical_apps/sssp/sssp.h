@@ -287,7 +287,10 @@ private:
     for (const auto& key : keys) {
       auto value = ctx.private_potential_result.get(key);
       if (value.has_value()) {
-        candidates.push_back({key, value.value()});
+        PrivateCandidate candidate;
+        candidate.oid = key;
+        candidate.candidate_distance = value.value();
+        candidates.push_back(candidate);
       }
     }
     return candidates;
