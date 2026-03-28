@@ -94,3 +94,22 @@ DEFINE_string(partition_output_prefix, "",
               "pesp_output_prefix, out_prefix, or current directory.");
 DEFINE_string(pesp_output_prefix, "",
               "optional directory used to dump PESP assignment diagnostics.");
+
+DEFINE_bool(runtime_feedback, false,
+            "enable lightweight runtime feedback for runtime-stage SSSP "
+            "experiments.");
+DEFINE_int32(runtime_feedback_trigger_candidates, 512,
+             "trigger runtime feedback when private candidate count reaches "
+             "this threshold.");
+DEFINE_int32(runtime_feedback_trigger_total_pressure, 1024,
+             "trigger runtime feedback when active private vertices plus "
+             "private candidates reaches this threshold.");
+DEFINE_int32(runtime_feedback_private_budget, 256,
+             "maximum number of private candidates handled by the primary "
+             "TEE queue in one round when runtime feedback is enabled.");
+DEFINE_bool(tee_ree_coscheduling, false,
+            "enable a lightweight double-queue co-scheduling simulation on "
+            "top of runtime feedback.");
+DEFINE_int32(coscheduling_extra_private_budget, 128,
+             "additional private candidates that can be drained from the "
+             "collaborative queue when co-scheduling is enabled.");

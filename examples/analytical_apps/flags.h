@@ -67,4 +67,11 @@ DECLARE_double(pesp_eta_private);
 DECLARE_string(pesp_output_prefix);
 DECLARE_bool(partition_report);
 DECLARE_string(partition_output_prefix);
+
+DECLARE_bool(runtime_feedback);
+DECLARE_int32(runtime_feedback_trigger_candidates);
+DECLARE_int32(runtime_feedback_trigger_total_pressure);
+DECLARE_int32(runtime_feedback_private_budget);
+DECLARE_bool(tee_ree_coscheduling);
+DECLARE_int32(coscheduling_extra_private_budget);
 #endif  // EXAMPLES_ANALYTICAL_APPS_FLAGS_H_

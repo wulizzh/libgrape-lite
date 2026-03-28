@@ -33,3 +33,6 @@ compile_commands.json
 
 # clangd
 .cache/
+
+# local benchmark outputs
+benchmark_outputs/
