@@ -16,11 +16,13 @@ limitations under the License.
 #ifndef EXAMPLES_ANALYTICAL_APPS_CDLP_CDLP_SELECTIVE_CONTEXT_H_
 #define EXAMPLES_ANALYTICAL_APPS_CDLP_CDLP_SELECTIVE_CONTEXT_H_
 
+#include <fstream>
 #include <vector>
 
 #include <grape/grape.h>
 
 #include "TEE/connection_pool.h"
+#include "tee_metrics.h"
 
 namespace grape {
 /**
@@ -67,6 +69,7 @@ class CDLPSelectiveContext : public VertexDataContext<FRAG_T, typename FRAG_T::o
     postprocess_time = 0;
 #endif
     step = 0;
+    tee_metrics = TeeMetrics();
   }
 
   void Output(std::ostream& os) override {
@@ -76,6 +79,7 @@ class CDLPSelectiveContext : public VertexDataContext<FRAG_T, typename FRAG_T::o
     for (auto v : inner_vertices) {
       os << frag.GetId(v) << " " << labels[v] << std::endl;
     }
+    DumpTeeMetrics("cdlp_selective", static_cast<int>(frag.fid()), tee_metrics);
     ostream.close();
   }
 
@@ -84,6 +88,7 @@ class CDLPSelectiveContext : public VertexDataContext<FRAG_T, typename FRAG_T::o
   typename FRAG_T::template inner_vertex_array_t<bool> changed;
   std::ofstream ostream;
   ConnectionPool connection_pool;
+  TeeMetrics tee_metrics;
 
 #ifdef PROFILING
   double preprocess_time = 0;

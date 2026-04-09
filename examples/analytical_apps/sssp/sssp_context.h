@@ -27,7 +27,9 @@ limitations under the License.
 #include <grape/grape.h>
 #include <grape/utils/thread_safe_mapper.h>
 
+#include "TEE/connection_pool.h"
 #include "flags.h"
+#include "tee_metrics.h"
 
 namespace grape {
 
@@ -84,13 +86,19 @@ class SSSPContext : public VertexDataContext<FRAG_T, double> {
     runtime_superstep = 0;
     runtime_stats.clear();
     deferred_private_potential_result.clear();
+    private_candidate_message_count.clear();
+    deferred_private_message_count.clear();
     feedback_trigger_rounds = 0;
     simulated_migration_count = 0;
     total_processed_private_candidates = 0;
     total_deferred_private_candidates = 0;
     accumulated_wait_proxy_ms = 0.0;
     coscheduling_rounds = 0;
+    runtime_feedback_control_active = false;
+    runtime_feedback_alpha_weight = 1.0;
+    runtime_feedback_beta_weight = 1.0;
     ResetRuntimeFeedbackRoundState();
+    tee_metrics = TeeMetrics();
   }
 
   void ResetRuntimeFeedbackRoundState() {
@@ -110,18 +118,31 @@ class SSSPContext : public VertexDataContext<FRAG_T, double> {
                                     bool coscheduling_activated) {
     round_processed_private_candidates = processed_private_candidates;
     round_deferred_private_candidates = deferred_private_candidates;
-    round_secure_memory_level = secure_memory_level;
-    round_feedback_overhead_ms = feedback_overhead_ms;
+    round_secure_memory_level =
+        std::max(round_secure_memory_level, secure_memory_level);
+    round_feedback_overhead_ms += feedback_overhead_ms;
     round_feedback_triggered = feedback_triggered;
-    round_coscheduling_activated = coscheduling_activated;
+    round_coscheduling_activated =
+        round_coscheduling_activated || coscheduling_activated;
 
     total_processed_private_candidates += processed_private_candidates;
     total_deferred_private_candidates += deferred_private_candidates;
     simulated_migration_count += deferred_private_candidates;
+  }
+
+  void SetRuntimeFeedbackBaselineState(size_t secure_memory_level) {
+    round_secure_memory_level =
+        std::max(round_secure_memory_level, secure_memory_level);
+  }
+
+  void FinalizeRuntimeFeedbackRoundDecision(bool feedback_triggered,
+                                            double feedback_overhead_ms) {
+    round_feedback_triggered = feedback_triggered;
+    round_feedback_overhead_ms += feedback_overhead_ms;
     if (feedback_triggered) {
       ++feedback_trigger_rounds;
     }
-    if (coscheduling_activated) {
+    if (round_coscheduling_activated) {
       ++coscheduling_rounds;
     }
   }
@@ -138,13 +159,64 @@ class SSSPContext : public VertexDataContext<FRAG_T, double> {
       if (value.has_value()) {
         private_potential_result.insert_or_update_min(key, value.value());
       }
+      auto pending_messages = deferred_private_message_count.get(key);
+      if (pending_messages.has_value()) {
+        private_candidate_message_count.insert_or_accumulate(
+            key, pending_messages.value());
+      }
     }
     deferred_private_potential_result.clear();
+    deferred_private_message_count.clear();
     return keys.size();
   }
 
   size_t DeferredPrivateQueueSize() const {
     return deferred_private_potential_result.size();
+  }
+
+  void TrackPrivateCandidate(const oid_t& oid, double candidate_distance) {
+    private_potential_result.insert_or_update_min(oid, candidate_distance);
+    private_candidate_message_count.insert_or_accumulate(oid,
+                                                         static_cast<size_t>(1));
+  }
+
+  void TrackDeferredPrivateCandidate(const oid_t& oid, double candidate_distance,
+                                     size_t pending_messages) {
+    deferred_private_potential_result.insert_or_update_min(oid,
+                                                           candidate_distance);
+    deferred_private_message_count.insert_or_accumulate(oid, pending_messages);
+  }
+
+  size_t GetPrivateCandidateMessageCount(const oid_t& oid) const {
+    auto value = private_candidate_message_count.get(oid);
+    if (value.has_value()) {
+      return value.value();
+    }
+    return 0;
+  }
+
+  void ClearPrivateCandidateState() {
+    private_potential_result.clear();
+    private_candidate_message_count.clear();
+  }
+
+  void SetRuntimeFeedbackControl(bool enabled, double alpha_weight,
+                                 double beta_weight) {
+    runtime_feedback_control_active = enabled;
+    runtime_feedback_alpha_weight = alpha_weight;
+    runtime_feedback_beta_weight = beta_weight;
+  }
+
+  bool RuntimeFeedbackControlActive() const {
+    return runtime_feedback_control_active;
+  }
+
+  double RuntimeFeedbackAlphaWeight() const {
+    return runtime_feedback_alpha_weight;
+  }
+
+  double RuntimeFeedbackBetaWeight() const {
+    return runtime_feedback_beta_weight;
   }
 
   void RecordRoundStat(const std::string& phase, double duration_ms,
@@ -222,6 +294,7 @@ class SSSPContext : public VertexDataContext<FRAG_T, double> {
       }
     }
     DumpRuntimeStats();
+    DumpTeeMetrics("sssp", static_cast<int>(frag.fid()), tee_metrics);
     ostream.close();
 #ifdef PROFILING
     VLOG(2) << "preprocess_time: " << preprocess_time << "s.";
@@ -236,11 +309,14 @@ class SSSPContext : public VertexDataContext<FRAG_T, double> {
   DenseVertexSet<typename FRAG_T::vertices_t> curr_modified, next_modified;
   ThreadSafeMapper<oid_t, double> private_potential_result;
   ThreadSafeMapper<oid_t, double> deferred_private_potential_result;
+  ThreadSafeMapper<oid_t, size_t> private_candidate_message_count;
+  ThreadSafeMapper<oid_t, size_t> deferred_private_message_count;
 
   long int private_count = 0;
   int private_count_iter = 0;
   std::ofstream ostream;
   ConnectionPool connection_pool;
+  TeeMetrics tee_metrics;
   int runtime_superstep = 0;
   std::vector<RuntimeRoundStat> runtime_stats;
   size_t round_processed_private_candidates = 0;
@@ -255,6 +331,9 @@ class SSSPContext : public VertexDataContext<FRAG_T, double> {
   size_t total_deferred_private_candidates = 0;
   double accumulated_wait_proxy_ms = 0.0;
   size_t coscheduling_rounds = 0;
+  bool runtime_feedback_control_active = false;
+  double runtime_feedback_alpha_weight = 1.0;
+  double runtime_feedback_beta_weight = 1.0;
 
 #ifdef PROFILING
   double preprocess_time = 0;

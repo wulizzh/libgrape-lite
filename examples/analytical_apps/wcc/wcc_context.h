@@ -16,7 +16,13 @@ limitations under the License.
 #ifndef EXAMPLES_ANALYTICAL_APPS_WCC_WCC_CONTEXT_H_
 #define EXAMPLES_ANALYTICAL_APPS_WCC_WCC_CONTEXT_H_
 
+#include <fstream>
+
 #include <grape/grape.h>
+#include <grape/utils/thread_safe_mapper.h>
+
+#include "TEE/connection_pool.h"
+#include "tee_metrics.h"
 
 namespace grape {
 
@@ -41,13 +47,17 @@ class WCCContext : public WCCContextType<FRAG_T> {
   using cid_t = typename WCCContextType<FRAG_T>::data_t;
 
   explicit WCCContext(const FRAG_T& fragment)
-      : WCCContextType<FRAG_T>(fragment, true), comp_id(this->data()) {}
+      : WCCContextType<FRAG_T>(fragment, true),
+        comp_id(this->data()),
+        connection_pool(1) {}
 
   void Init(ParallelMessageManager& messages) {
     auto& frag = this->fragment();
 
     curr_modified.Init(frag.Vertices());
     next_modified.Init(frag.Vertices());
+    private_candidate_result.clear();
+    tee_metrics = TeeMetrics();
   }
 
   void Output(std::ostream& os) override {
@@ -56,6 +66,7 @@ class WCCContext : public WCCContextType<FRAG_T> {
     for (auto v : inner_vertices) {
       os << frag.GetId(v) << " " << comp_id[v] << std::endl;
     }
+    DumpTeeMetrics("wcc", static_cast<int>(frag.fid()), tee_metrics);
 #ifdef PROFILING
     VLOG(2) << "preprocess_time: " << preprocess_time << "s.";
     VLOG(2) << "eval_time: " << eval_time << "s.";
@@ -66,6 +77,9 @@ class WCCContext : public WCCContextType<FRAG_T> {
   typename FRAG_T::template vertex_array_t<cid_t>& comp_id;
 
   DenseVertexSet<typename FRAG_T::vertices_t> curr_modified, next_modified;
+  ThreadSafeMapper<oid_t, cid_t> private_candidate_result;
+  ConnectionPool connection_pool;
+  TeeMetrics tee_metrics;
 
 #ifdef PROFILING
   double preprocess_time = 0;

@@ -67,15 +67,16 @@ DEFINE_double(pesp_beta, 0.40,
 DEFINE_double(pesp_gamma, 0.25,
               "weight of degree penalty in PESP.");
 DEFINE_double(pesp_budget_lambda, 1.2,
-              "slack coefficient used to derive the unit security budget "
-              "from average private-load statistics.");
+              "slack coefficient used to derive the effective fragment "
+              "budget from average total privacy entropy.");
 DEFINE_double(pesp_mu, 1.0,
               "barrier coefficient for secure memory pressure in PESP.");
 DEFINE_double(pesp_omega, 1.0,
               "global trade-off weight between affinity and load penalty.");
 DEFINE_double(pesp_secure_capacity, 0.0,
               "optional explicit effective security budget override; "
-              "non-positive values enable data-driven budget derivation.");
+              "non-positive values enable budget derivation from global "
+              "privacy-entropy statistics.");
 DEFINE_double(pesp_topology_weight, 1.0,
               "weight of assigned-neighbor locality in PESP.");
 DEFINE_double(pesp_blueprint_weight, 1.0,
@@ -107,6 +108,13 @@ DEFINE_int32(runtime_feedback_trigger_total_pressure, 1024,
 DEFINE_int32(runtime_feedback_private_budget, 256,
              "maximum number of private candidates handled by the primary "
              "TEE queue in one round when runtime feedback is enabled.");
+DEFINE_double(runtime_feedback_slowdown_tolerance, 1.5,
+              "relative slowdown multiplier used to identify runtime slow "
+              "workers against the cluster-wide average round duration.");
+DEFINE_double(runtime_feedback_secure_pressure_ratio, 0.9,
+              "secure-memory pressure ratio used together with "
+              "runtime_feedback_trigger_total_pressure to identify "
+              "high-pressure workers.");
 DEFINE_bool(tee_ree_coscheduling, false,
             "enable a lightweight double-queue co-scheduling simulation on "
             "top of runtime feedback.");

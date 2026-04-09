@@ -58,6 +58,17 @@ public:
     }
   }
 
+  // 插入或累加键值对
+  void insert_or_accumulate(const Key& key, const Value& value) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto it = data_.find(key);
+    if (it != data_.end()) {
+      it->second += value;
+    } else {
+      data_[key] = value;
+    }
+  }
+
   // 删除指定键
   bool remove(const Key& key) {
     std::lock_guard<std::mutex> lock(mutex_);

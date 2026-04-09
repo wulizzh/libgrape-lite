@@ -18,6 +18,7 @@ limitations under the License.
 
 #include <TEE/TEE_connection.h>
 #include <algorithm>
+#include <chrono>
 #include <random>
 #include <vector>
 
@@ -29,6 +30,23 @@ limitations under the License.
 #endif
 
 namespace grape {
+
+template <typename CONTEXT_T, typename VALUE_T>
+inline bool SecureEqual(CONTEXT_T& ctx,
+                        const std::shared_ptr<TEE_connection>& conn,
+                        const VALUE_T& lhs, const VALUE_T& rhs) {
+  auto tee_begin = std::chrono::steady_clock::now();
+  bool equal = conn->is_equal(lhs, rhs);
+  auto tee_end = std::chrono::steady_clock::now();
+  double tee_time_ms =
+      static_cast<double>(
+          std::chrono::duration_cast<std::chrono::microseconds>(tee_end -
+                                                                tee_begin)
+              .count()) /
+      1000.0;
+  ctx.tee_metrics.Record(tee_time_ms, 1);
+  return equal;
+}
 
 template <typename LABEL_T>
 using LabelMapType = std::map<LABEL_T, int>;
@@ -99,7 +117,7 @@ template <typename LABEL_T, typename CONTEXT_T,typename VID_T, typename FRAG_T, 
 inline LABEL_T update_label_fast_selected(const ADJ_LIST_T& edges,
                                  const VERTEX_ARRAY_T& labels,
                                  const LABEL_T& original_label,
-                                 const CONTEXT_T& ctx,
+                                 CONTEXT_T& ctx,
                                  const FRAG_T& frag,
                                  std::shared_ptr<TEE_connection> conn) {
   static thread_local std::vector<LABEL_T> local_labels;
@@ -130,7 +148,7 @@ inline LABEL_T update_label_fast_selected(const ADJ_LIST_T& edges,
   int label_num = local_labels.size();
 
   for (int i = 1; i < label_num; ++i) {
-    if (!conn->is_equal(local_labels[i],local_labels[i - 1])) {
+    if (!SecureEqual(ctx, conn, local_labels[i], local_labels[i - 1])) {
       if (curr_count > best_count) {
 //        best_label = curr_label;
         best_labels.clear();

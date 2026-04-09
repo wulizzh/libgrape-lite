@@ -16,6 +16,10 @@ limitations under the License.
 #ifndef EXAMPLES_ANALYTICAL_APPS_WCC_WCC_H_
 #define EXAMPLES_ANALYTICAL_APPS_WCC_WCC_H_
 
+#include <algorithm>
+#include <chrono>
+#include <vector>
+
 #include <grape/grape.h>
 
 #include "wcc/wcc_context.h"
@@ -45,6 +49,92 @@ class WCC : public ParallelAppBase<FRAG_T, WCCContext<FRAG_T>>,
   static constexpr bool need_split_edges = true;
 
  private:
+  static double EncodeCidForTee(typename context_t::cid_t cid) {
+    return static_cast<double>(cid);
+  }
+
+  static typename context_t::cid_t DecodeCidFromTee(double value) {
+    return static_cast<typename context_t::cid_t>(value);
+  }
+
+  void TrackPrivateCandidate(const fragment_t& frag, context_t& ctx,
+                             const vertex_t& vertex,
+                             typename context_t::cid_t candidate_cid) {
+    ctx.private_candidate_result.insert_or_update_min(frag.GetId(vertex),
+                                                      candidate_cid);
+  }
+
+  template <typename OnUpdate>
+  void ApplyPrivateCandidates(const fragment_t& frag, context_t& ctx,
+                              OnUpdate on_update) {
+    auto keys = ctx.private_candidate_result.keys();
+    if (keys.empty()) {
+      return;
+    }
+
+    auto conn = ctx.connection_pool.acquire();
+    conn->resetSharedMemory();
+
+    size_t buffer_bytes = 0;
+    double* current =
+        static_cast<double*>(conn->sssp_get_current_buffer(buffer_bytes));
+    double* target =
+        static_cast<double*>(conn->sssp_get_target_buffer(buffer_bytes));
+    size_t buffer_capacity = std::max<size_t>(1, buffer_bytes / sizeof(double));
+    std::vector<vertex_t> batch_vertices;
+    batch_vertices.reserve(buffer_capacity);
+
+    auto flush_batch = [&]() {
+      if (batch_vertices.empty()) {
+        return;
+      }
+      auto tee_begin = std::chrono::steady_clock::now();
+      conn->sssp_compare();
+      auto tee_end = std::chrono::steady_clock::now();
+      double tee_time_ms =
+          static_cast<double>(
+              std::chrono::duration_cast<std::chrono::microseconds>(tee_end -
+                                                                    tee_begin)
+                  .count()) /
+          1000.0;
+      ctx.tee_metrics.Record(tee_time_ms, batch_vertices.size());
+
+      for (size_t i = 0; i < batch_vertices.size(); ++i) {
+        if (target[i] > 0) {
+          ctx.comp_id[batch_vertices[i]] = DecodeCidFromTee(current[i]);
+          on_update(batch_vertices[i]);
+        }
+      }
+
+      batch_vertices.clear();
+      conn->resetSharedMemory();
+    };
+
+    for (const auto& key : keys) {
+      auto value = ctx.private_candidate_result.get(key);
+      if (!value.has_value()) {
+        continue;
+      }
+      vertex_t vertex;
+      if (!frag.GetVertex(key, vertex)) {
+        continue;
+      }
+
+      size_t offset = batch_vertices.size();
+      current[offset] = EncodeCidForTee(ctx.comp_id[vertex]);
+      target[offset] = EncodeCidForTee(value.value());
+      batch_vertices.push_back(vertex);
+
+      if (batch_vertices.size() == buffer_capacity) {
+        flush_batch();
+      }
+    }
+
+    flush_batch();
+    ctx.private_candidate_result.clear();
+    ctx.connection_pool.release(conn);
+  }
+
   // Propagate label through pulling.
   // Each vertex update its state by pulling neighbors' states.
   void PropagateLabelPull(const fragment_t& frag, context_t& ctx,
@@ -54,7 +144,7 @@ class WCC : public ParallelAppBase<FRAG_T, WCCContext<FRAG_T>>,
 
     auto& channels = messages.Channels();
 
-    ForEach(inner_vertices, [&frag, &ctx](int tid, vertex_t v) {
+    ForEach(inner_vertices, [this, &frag, &ctx](int tid, vertex_t v) {
       auto old_cid = ctx.comp_id[v];
       auto new_cid = old_cid;
       auto es = frag.GetOutgoingInnerVertexAdjList(v);
@@ -63,12 +153,16 @@ class WCC : public ParallelAppBase<FRAG_T, WCCContext<FRAG_T>>,
         new_cid = MIN_COMP_ID(ctx.comp_id[u], new_cid);
       }
       if (new_cid < old_cid) {
-        ctx.comp_id[v] = new_cid;
-        ctx.next_modified.Insert(v);
+        if (frag.GetSecret(v)) {
+          TrackPrivateCandidate(frag, ctx, v, new_cid);
+        } else {
+          ctx.comp_id[v] = new_cid;
+          ctx.next_modified.Insert(v);
+        }
       }
     });
 
-    ForEach(outer_vertices, [&frag, &ctx, &channels](int tid, vertex_t v) {
+    ForEach(outer_vertices, [this, &frag, &ctx, &channels](int tid, vertex_t v) {
       auto old_cid = ctx.comp_id[v];
       auto new_cid = old_cid;
       auto es = frag.GetIncomingAdjList(v);
@@ -76,18 +170,38 @@ class WCC : public ParallelAppBase<FRAG_T, WCCContext<FRAG_T>>,
         auto u = e.get_neighbor();
         new_cid = MIN_COMP_ID(ctx.comp_id[u], new_cid);
       }
-      ctx.comp_id[v] = new_cid;
       if (new_cid < old_cid) {
-        ctx.next_modified.Insert(v);
+        if (frag.GetSecret(v)) {
+          TrackPrivateCandidate(frag, ctx, v, new_cid);
+        } else {
+          ctx.comp_id[v] = new_cid;
+          ctx.next_modified.Insert(v);
 #ifdef WCC_USE_GID
-        channels[tid].SyncStateOnOuterVertex<fragment_t, vid_t>(frag, v,
-                                                                new_cid);
+          channels[tid].SyncStateOnOuterVertex<fragment_t, vid_t>(frag, v,
+                                                                  new_cid);
 #else
-        channels[tid].SyncStateOnOuterVertex<fragment_t, oid_t>(frag, v,
-                                                                new_cid);
+          channels[tid].SyncStateOnOuterVertex<fragment_t, oid_t>(frag, v,
+                                                                  new_cid);
 #endif
+        }
+      } else {
+        ctx.comp_id[v] = new_cid;
       }
     });
+
+    ApplyPrivateCandidates(
+        frag, ctx, [&channels, &frag, &ctx](vertex_t v) {
+          ctx.next_modified.Insert(v);
+          if (frag.IsOuterVertex(v)) {
+#ifdef WCC_USE_GID
+            channels[0].SyncStateOnOuterVertex<fragment_t, vid_t>(
+                frag, v, ctx.comp_id[v]);
+#else
+            channels[0].SyncStateOnOuterVertex<fragment_t, oid_t>(
+                frag, v, ctx.comp_id[v]);
+#endif
+          }
+        });
   }
 
   // Propagate label through pushing
@@ -99,17 +213,25 @@ class WCC : public ParallelAppBase<FRAG_T, WCCContext<FRAG_T>>,
 
     // propagate label to incoming and outgoing neighbors
     ForEach(ctx.curr_modified, inner_vertices,
-            [&frag, &ctx](int tid, vertex_t v) {
+            [this, &frag, &ctx](int tid, vertex_t v) {
               auto cid = ctx.comp_id[v];
               auto es = frag.GetOutgoingAdjList(v);
               for (auto& e : es) {
                 auto u = e.get_neighbor();
                 if (ctx.comp_id[u] > cid) {
-                  atomic_min(ctx.comp_id[u], cid);
-                  ctx.next_modified.Insert(u);
+                  if (frag.GetSecret(u)) {
+                    TrackPrivateCandidate(frag, ctx, u, cid);
+                  } else {
+                    atomic_min(ctx.comp_id[u], cid);
+                    ctx.next_modified.Insert(u);
+                  }
                 }
               }
             });
+
+    ApplyPrivateCandidates(frag, ctx, [&ctx](vertex_t v) {
+      ctx.next_modified.Insert(v);
+    });
 
     ForEach(outer_vertices, [&messages, &frag, &ctx](int tid, vertex_t v) {
       if (ctx.next_modified.Exist(v)) {
@@ -179,16 +301,24 @@ class WCC : public ParallelAppBase<FRAG_T, WCCContext<FRAG_T>>,
     // aggregate messages
 #ifdef WCC_USE_GID
     messages.ParallelProcess<fragment_t, vid_t>(
-        thread_num(), frag, [&ctx](int tid, vertex_t u, vid_t msg) {
+        thread_num(), frag, [this, &ctx, &frag](int tid, vertex_t u, vid_t msg) {
 #else
     messages.ParallelProcess<fragment_t, oid_t>(
-        thread_num(), frag, [&ctx](int tid, vertex_t u, oid_t msg) {
+        thread_num(), frag, [this, &ctx, &frag](int tid, vertex_t u, oid_t msg) {
 #endif
           if (ctx.comp_id[u] > msg) {
-            atomic_min(ctx.comp_id[u], msg);
-            ctx.curr_modified.Insert(u);
+            if (frag.GetSecret(u)) {
+              TrackPrivateCandidate(frag, ctx, u, msg);
+            } else {
+              atomic_min(ctx.comp_id[u], msg);
+              ctx.curr_modified.Insert(u);
+            }
           }
         });
+
+    ApplyPrivateCandidates(frag, ctx, [&ctx](vertex_t v) {
+      ctx.curr_modified.Insert(v);
+    });
 
 #ifdef PROFILING
     ctx.preprocess_time += GetCurrentTime();

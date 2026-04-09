@@ -72,6 +72,8 @@ DECLARE_bool(runtime_feedback);
 DECLARE_int32(runtime_feedback_trigger_candidates);
 DECLARE_int32(runtime_feedback_trigger_total_pressure);
 DECLARE_int32(runtime_feedback_private_budget);
+DECLARE_double(runtime_feedback_slowdown_tolerance);
+DECLARE_double(runtime_feedback_secure_pressure_ratio);
 DECLARE_bool(tee_ree_coscheduling);
 DECLARE_int32(coscheduling_extra_private_budget);
 #endif  // EXAMPLES_ANALYTICAL_APPS_FLAGS_H_

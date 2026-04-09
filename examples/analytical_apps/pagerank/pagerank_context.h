@@ -16,9 +16,14 @@ limitations under the License.
 #ifndef EXAMPLES_ANALYTICAL_APPS_PAGERANK_PAGERANK_CONTEXT_H_
 #define EXAMPLES_ANALYTICAL_APPS_PAGERANK_PAGERANK_CONTEXT_H_
 
+#include <fstream>
 #include <iomanip>
 
 #include <grape/grape.h>
+#include <grape/utils/thread_safe_mapper.h>
+
+#include "TEE/connection_pool.h"
+#include "tee_metrics.h"
 
 namespace grape {
 /**
@@ -34,7 +39,8 @@ class PageRankContext : public VertexDataContext<FRAG_T, double> {
  public:
   explicit PageRankContext(const FRAG_T& fragment)
       : VertexDataContext<FRAG_T, double>(fragment, true),
-        result(this->data()) {
+        result(this->data()),
+        connection_pool(1) {
     auto inner_vertices = fragment.InnerVertices();
     auto vertices = fragment.Vertices();
     degree.Init(inner_vertices);
@@ -69,6 +75,8 @@ class PageRankContext : public VertexDataContext<FRAG_T, double> {
                            std::move(recv_buffers[i]));
     }
     step = 0;
+    private_candidate_result.clear();
+    tee_metrics = TeeMetrics();
   }
 
   void Output(std::ostream& os) override {
@@ -78,6 +86,7 @@ class PageRankContext : public VertexDataContext<FRAG_T, double> {
       os << frag.GetId(v) << " " << std::scientific << std::setprecision(15)
          << result[v] << std::endl;
     }
+    DumpTeeMetrics("pagerank", static_cast<int>(frag.fid()), tee_metrics);
 #ifdef PROFILING
     VLOG(2) << "preprocess_time: " << preprocess_time << "s.";
     VLOG(2) << "exec_time: " << exec_time << "s.";
@@ -90,6 +99,9 @@ class PageRankContext : public VertexDataContext<FRAG_T, double> {
   typename FRAG_T::template vertex_array_t<double> next_result;
   std::vector<std::vector<char, Allocator<char>>> send_buffers;
   std::vector<std::vector<char, Allocator<char>>> recv_buffers;
+  ThreadSafeMapper<oid_t, double> private_candidate_result;
+  ConnectionPool connection_pool;
+  TeeMetrics tee_metrics;
 
 #ifdef PROFILING
   double preprocess_time = 0;

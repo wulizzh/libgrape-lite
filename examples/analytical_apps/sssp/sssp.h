@@ -18,9 +18,12 @@ limitations under the License.
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
+#include <grape/communication/communicator.h>
 #include <grape/grape.h>
 
 #include "sssp/sssp_context.h"
@@ -40,7 +43,8 @@ namespace grape {
  */
 template <typename FRAG_T>
 class SSSP : public ParallelAppBase<FRAG_T, SSSPContext<FRAG_T>>,
-             public ParallelEngine {
+             public ParallelEngine,
+             public Communicator {
 
  public:
   // specialize the templated worker.
@@ -98,8 +102,8 @@ class SSSP : public ParallelAppBase<FRAG_T, SSSPContext<FRAG_T>>,
         vertex_t v = e.get_neighbor();
         // ctx.ostream << "out v" << frag.GetId(v) << ": " << ctx.partial_result[v] << std::endl;
         if (frag.GetSecret(v)) {
-          ctx.private_potential_result.insert_or_update_min(
-              frag.GetId(v), static_cast<double>(e.get_data()));
+          ctx.TrackPrivateCandidate(frag.GetId(v),
+                                    static_cast<double>(e.get_data()));
         } else {
           ctx.partial_result[v] =
               std::min(ctx.partial_result[v], static_cast<double>(e.get_data()));
@@ -109,6 +113,8 @@ class SSSP : public ParallelAppBase<FRAG_T, SSSPContext<FRAG_T>>,
     }
     ctx.MergeDeferredPrivateCandidates();
     size_t private_candidates = ctx.private_potential_result.size();
+    ctx.SetRuntimeFeedbackBaselineState(active_private_vertices +
+                                        private_candidates);
     if (private_candidates != 0) {
       processPrivate(frag, ctx, active_private_vertices);
     }
@@ -143,6 +149,7 @@ class SSSP : public ParallelAppBase<FRAG_T, SSSPContext<FRAG_T>>,
                 .count());
     ctx.ostream << duration_ms << std::endl;
     ctx.AccumulateDeferredWaitProxy(duration_ms);
+    UpdateRuntimeFeedbackControl(ctx, duration_ms, active_private_vertices);
     ctx.RecordRoundStat("PEval", duration_ms, active_vertices,
                         active_private_vertices, private_candidates,
                         next_vertices, next_outer_vertices);
@@ -207,8 +214,7 @@ class SSSP : public ParallelAppBase<FRAG_T, SSSPContext<FRAG_T>>,
                 vertex_t u = e.get_neighbor();
                 double ndistu = distv + e.get_data();
                 if (frag.GetSecret(u)) {
-                  ctx.private_potential_result.insert_or_update_min(
-                      frag.GetId(u), ndistu);
+                  ctx.TrackPrivateCandidate(frag.GetId(u), ndistu);
                 } else {
                   if (ndistu < ctx.partial_result[u]) {
                     atomic_min(ctx.partial_result[u], ndistu);
@@ -219,6 +225,8 @@ class SSSP : public ParallelAppBase<FRAG_T, SSSPContext<FRAG_T>>,
             });
     ctx.MergeDeferredPrivateCandidates();
     size_t private_candidates = ctx.private_potential_result.size();
+    ctx.SetRuntimeFeedbackBaselineState(static_cast<size_t>(ctx.private_count_iter) +
+                                        private_candidates);
     if (private_candidates != 0) {
       processPrivate(frag, ctx, static_cast<size_t>(ctx.private_count_iter));
     }
@@ -247,6 +255,8 @@ class SSSP : public ParallelAppBase<FRAG_T, SSSPContext<FRAG_T>>,
     size_t next_outer_vertices =
         ctx.next_modified.PartialCount(inner_end, vertex_end);
     ctx.AccumulateDeferredWaitProxy(duration_ms);
+    UpdateRuntimeFeedbackControl(ctx, duration_ms,
+                                 static_cast<size_t>(ctx.private_count_iter));
     ctx.RecordRoundStat("IncEval", duration_ms, active_vertices,
                         static_cast<size_t>(ctx.private_count_iter),
                         private_candidates, next_vertices, next_outer_vertices);
@@ -269,6 +279,8 @@ private:
   struct PrivateCandidate {
     typename context_t::oid_t oid;
     double candidate_distance = 0.0;
+    size_t pending_messages = 0;
+    double urgency_score = 0.0;
   };
 
   struct PrivateProcessResult {
@@ -278,6 +290,28 @@ private:
     double feedback_overhead_ms = 0.0;
     bool feedback_triggered = false;
     bool coscheduling_activated = false;
+  };
+
+  struct RuntimeFeedbackSnapshot {
+    double duration_ms = 0.0;
+    size_t secure_memory_level = 0;
+    size_t active_private_vertices = 0;
+
+    friend InArchive& operator<<(InArchive& arc,
+                                 const RuntimeFeedbackSnapshot& value) {
+      arc << value.duration_ms;
+      arc << value.secure_memory_level;
+      arc << value.active_private_vertices;
+      return arc;
+    }
+
+    friend OutArchive& operator>>(OutArchive& arc,
+                                  RuntimeFeedbackSnapshot& value) {
+      arc >> value.duration_ms;
+      arc >> value.secure_memory_level;
+      arc >> value.active_private_vertices;
+      return arc;
+    }
   };
 
   std::vector<PrivateCandidate> SnapshotPrivateCandidates(context_t& ctx) {
@@ -290,10 +324,142 @@ private:
         PrivateCandidate candidate;
         candidate.oid = key;
         candidate.candidate_distance = value.value();
+        candidate.pending_messages =
+            std::max(static_cast<size_t>(1),
+                     ctx.GetPrivateCandidateMessageCount(key));
         candidates.push_back(candidate);
       }
     }
+    ctx.ClearPrivateCandidateState();
     return candidates;
+  }
+
+  void UpdateRuntimeFeedbackControl(context_t& ctx, double duration_ms,
+                                    size_t active_private_vertices) {
+    if (!FLAGS_runtime_feedback && !FLAGS_tee_ree_coscheduling) {
+      ctx.FinalizeRuntimeFeedbackRoundDecision(false, 0.0);
+      ctx.SetRuntimeFeedbackControl(false, 1.0, 1.0);
+      return;
+    }
+
+    RuntimeFeedbackSnapshot local_snapshot;
+    local_snapshot.duration_ms = duration_ms;
+    local_snapshot.secure_memory_level = ctx.round_secure_memory_level;
+    local_snapshot.active_private_vertices = active_private_vertices;
+
+    auto analyze_begin = std::chrono::steady_clock::now();
+    std::vector<RuntimeFeedbackSnapshot> all_snapshots;
+    this->AllGather(local_snapshot, all_snapshots);
+
+    double total_duration = 0.0;
+    double total_active_private = 0.0;
+    for (const auto& snapshot : all_snapshots) {
+      total_duration += snapshot.duration_ms;
+      total_active_private +=
+          static_cast<double>(snapshot.active_private_vertices);
+    }
+    double avg_duration =
+        all_snapshots.empty() ? 0.0 : total_duration / all_snapshots.size();
+    double avg_active_private =
+        all_snapshots.empty() ? 0.0 : total_active_private / all_snapshots.size();
+
+    double secure_pressure_threshold = 0.0;
+    if (FLAGS_runtime_feedback_trigger_total_pressure > 0) {
+      secure_pressure_threshold =
+          FLAGS_runtime_feedback_secure_pressure_ratio *
+          static_cast<double>(FLAGS_runtime_feedback_trigger_total_pressure);
+    }
+
+    bool high_duration =
+        avg_duration > 0.0 &&
+        duration_ms >
+            FLAGS_runtime_feedback_slowdown_tolerance * avg_duration;
+    bool high_pressure =
+        secure_pressure_threshold > 0.0 &&
+        static_cast<double>(ctx.round_secure_memory_level) >=
+            secure_pressure_threshold;
+    bool privacy_auxiliary =
+        avg_active_private <= 0.0 ||
+        static_cast<double>(active_private_vertices) >=
+            std::ceil(avg_active_private);
+
+    bool feedback_triggered =
+        FLAGS_runtime_feedback && high_duration && high_pressure &&
+        privacy_auxiliary;
+
+    double pressure_ratio = 1.0;
+    if (secure_pressure_threshold > 0.0) {
+      pressure_ratio =
+          static_cast<double>(ctx.round_secure_memory_level) /
+          secure_pressure_threshold;
+    }
+    double alpha_weight = std::max(1.0, std::min(pressure_ratio, 2.0));
+    double beta_weight = 1.0 / alpha_weight;
+
+    auto analyze_end = std::chrono::steady_clock::now();
+    double analysis_overhead_ms =
+        static_cast<double>(
+            std::chrono::duration_cast<std::chrono::microseconds>(
+                analyze_end - analyze_begin)
+                .count()) /
+        1000.0;
+
+    ctx.SetRuntimeFeedbackControl(feedback_triggered, alpha_weight,
+                                  beta_weight);
+    ctx.FinalizeRuntimeFeedbackRoundDecision(feedback_triggered,
+                                             analysis_overhead_ms);
+  }
+
+  double ComputePrivacyEntropyProxy(const fragment_t& frag,
+                                    const vertex_t& vertex) const {
+    size_t degree = 0;
+    for (auto& edge : frag.GetOutgoingAdjList(vertex)) {
+      static_cast<void>(edge);
+      ++degree;
+    }
+    return 1.0 + static_cast<double>(degree);
+  }
+
+  double ComputeTopologyDeltaProxy(const fragment_t& frag,
+                                   const vertex_t& vertex) const {
+    size_t source_neighbors = 0;
+    std::unordered_map<fid_t, size_t> target_neighbor_counts;
+    for (auto& edge : frag.GetOutgoingAdjList(vertex)) {
+      fid_t neighbor_fid = frag.GetFragId(edge.get_neighbor());
+      if (neighbor_fid == frag.fid()) {
+        ++source_neighbors;
+      } else {
+        ++target_neighbor_counts[neighbor_fid];
+      }
+    }
+    size_t best_target_neighbors = 0;
+    for (const auto& entry : target_neighbor_counts) {
+      best_target_neighbors =
+          std::max(best_target_neighbors, entry.second);
+    }
+    return static_cast<double>(best_target_neighbors) -
+           static_cast<double>(source_neighbors);
+  }
+
+  void PopulateCandidateUrgency(const fragment_t& frag, context_t& ctx,
+                                std::vector<PrivateCandidate>& candidates) {
+    double alpha_weight = ctx.RuntimeFeedbackAlphaWeight();
+    double beta_weight = ctx.RuntimeFeedbackBetaWeight();
+    for (auto& candidate : candidates) {
+      vertex_t vertex;
+      if (!frag.GetVertex(candidate.oid, vertex)) {
+        candidate.urgency_score = 0.0;
+        continue;
+      }
+      double privacy_entropy =
+          ComputePrivacyEntropyProxy(frag, vertex);
+      double active_pressure =
+          privacy_entropy * static_cast<double>(candidate.pending_messages);
+      double topology_delta =
+          ComputeTopologyDeltaProxy(frag, vertex);
+      candidate.urgency_score =
+          alpha_weight * active_pressure + beta_weight * topology_delta;
+    }
   }
 
   void ProcessCandidateBatch(const fragment_t& frag, context_t& ctx,
@@ -335,7 +501,16 @@ private:
       }
 
       // 调用 TEE 中的比较逻辑：结果将反映在 target[i] 中（是否更优）
+      auto tee_begin = std::chrono::steady_clock::now();
       conn->sssp_compare();
+      auto tee_end = std::chrono::steady_clock::now();
+      double tee_time_ms =
+          static_cast<double>(
+              std::chrono::duration_cast<std::chrono::microseconds>(tee_end -
+                                                                    tee_begin)
+                  .count()) /
+          1000.0;
+      ctx.tee_metrics.Record(tee_time_ms, batch_size);
 
       // 根据比较结果更新当前 fragment 的结果，并标记 modified
       for (size_t i = 0; i < batch_size; ++i) {
@@ -357,7 +532,6 @@ private:
   void processPrivate(const fragment_t& frag, context_t& ctx,
                       size_t active_private_vertices) {
     auto candidates = SnapshotPrivateCandidates(ctx);
-    ctx.private_potential_result.clear();
     if (candidates.empty()) {
       return;
     }
@@ -368,8 +542,15 @@ private:
     double feedback_overhead_ms = 0.0;
     if (FLAGS_runtime_feedback || FLAGS_tee_ree_coscheduling) {
       auto planning_start = std::chrono::steady_clock::now();
+      PopulateCandidateUrgency(frag, ctx, candidates);
       std::sort(candidates.begin(), candidates.end(),
                 [](const PrivateCandidate& lhs, const PrivateCandidate& rhs) {
+                  if (lhs.urgency_score != rhs.urgency_score) {
+                    return lhs.urgency_score > rhs.urgency_score;
+                  }
+                  if (lhs.pending_messages != rhs.pending_messages) {
+                    return lhs.pending_messages > rhs.pending_messages;
+                  }
                   if (lhs.candidate_distance != rhs.candidate_distance) {
                     return lhs.candidate_distance < rhs.candidate_distance;
                   }
@@ -385,34 +566,22 @@ private:
     }
 
     size_t process_budget = candidates.size();
-    if (FLAGS_runtime_feedback) {
-      bool reach_candidate_threshold =
-          FLAGS_runtime_feedback_trigger_candidates > 0 &&
-          candidates.size() >=
-              static_cast<size_t>(FLAGS_runtime_feedback_trigger_candidates);
-      bool reach_pressure_threshold =
-          FLAGS_runtime_feedback_trigger_total_pressure > 0 &&
-          result.secure_memory_level >=
-              static_cast<size_t>(FLAGS_runtime_feedback_trigger_total_pressure);
-
-      result.feedback_triggered =
-          reach_candidate_threshold || reach_pressure_threshold;
-      if (result.feedback_triggered) {
-        size_t base_budget =
-            FLAGS_runtime_feedback_private_budget > 0
-                ? static_cast<size_t>(FLAGS_runtime_feedback_private_budget)
-                : 1;
-        process_budget = std::min(candidates.size(), base_budget);
-        if (FLAGS_tee_ree_coscheduling && process_budget < candidates.size()) {
-          size_t extra_budget =
-              FLAGS_coscheduling_extra_private_budget > 0
-                  ? static_cast<size_t>(FLAGS_coscheduling_extra_private_budget)
-                  : 0;
-          size_t collaborative_budget =
-              std::min(candidates.size() - process_budget, extra_budget);
-          process_budget += collaborative_budget;
-          result.coscheduling_activated = collaborative_budget > 0;
-        }
+    if (ctx.RuntimeFeedbackControlActive()) {
+      result.feedback_triggered = true;
+      size_t base_budget =
+          FLAGS_runtime_feedback_private_budget > 0
+              ? static_cast<size_t>(FLAGS_runtime_feedback_private_budget)
+              : 1;
+      process_budget = std::min(candidates.size(), base_budget);
+      if (FLAGS_tee_ree_coscheduling && process_budget < candidates.size()) {
+        size_t extra_budget =
+            FLAGS_coscheduling_extra_private_budget > 0
+                ? static_cast<size_t>(FLAGS_coscheduling_extra_private_budget)
+                : 0;
+        size_t collaborative_budget =
+            std::min(candidates.size() - process_budget, extra_budget);
+        process_budget += collaborative_budget;
+        result.coscheduling_activated = collaborative_budget > 0;
       }
     }
 
@@ -424,8 +593,9 @@ private:
     ProcessCandidateBatch(frag, ctx, candidates, 0, process_budget);
 
     for (size_t i = process_budget; i < candidates.size(); ++i) {
-      ctx.deferred_private_potential_result.insert_or_update_min(
-          candidates[i].oid, candidates[i].candidate_distance);
+      ctx.TrackDeferredPrivateCandidate(candidates[i].oid,
+                                        candidates[i].candidate_distance,
+                                        candidates[i].pending_messages);
     }
 
     ctx.SetRuntimeFeedbackRoundState(

@@ -74,13 +74,11 @@ class TEE_connection {
        * TA_HELLO_WORLD_CMD_INC_VALUE is the actual function in the TA to be
        * called.
        */
-      std::cout << "Invoking TA to compare" << op.params[0].value.a << " " << op.params[1].value.a << std::endl;
       res = TEEC_InvokeCommand(&sess, TA_TEE_CONNECTION_COMPAIRE, &op,
                    &err_origin);
       if (res != TEEC_SUCCESS)
           errx(1, "TEEC_InvokeCommand failed with code 0x%x origin 0x%x",
               res, err_origin);
-      std::cout << "TA results: " << op.params[2].value.a << std::endl;
       return op.params[2].value.a;
     }
 
@@ -109,42 +107,36 @@ class TEE_connection {
            * TA_HELLO_WORLD_CMD_INC_VALUE is the actual function in the TA to be
            * called.
            */
-          std::cout << "Invoking TA to decrypt " << op.params[0].value.a << ", offset " << op.params[1].value.a << ", mod " << op.params[1].value.b << std::endl;
           res = TEEC_InvokeCommand(&sess, TA_TEE_CONNECTION_DECODE_ID, &op,
                        &err_origin);
           if (res != TEEC_SUCCESS)
               errx(1, "TEEC_InvokeCommand failed with code 0x%x origin 0x%x",
                   res, err_origin);
-          std::cout << "TA results: " << op.params[0].value.a << std::endl;
           return op.params[0].value.a;
       }
 
     double min(double a, double b){
-      shm_0.size = sizeof(double) * 2;
-      shm_0.flags = TEEC_MEM_INPUT | TEEC_MEM_OUTPUT;
-      res = TEEC_AllocateSharedMemory(&ctx, &shm_0);
-      if (res != TEEC_SUCCESS) {
-        printf("TEEC_AllocateSharedMemory failed: 0x%x\n", res);
-      }
-      double * shared_data = (double *) shm_0.buffer;
+      EnsureScalarSharedMemory();
+      double * shared_data = (double *) scalar_shm_0.buffer;
       shared_data[0] = a;
       shared_data[1] = b;
 
       memset(&op, 0, sizeof(op));
       op.paramTypes = TEEC_PARAM_TYPES(TEEC_MEMREF_WHOLE, TEEC_NONE, TEEC_NONE, TEEC_NONE);
-      op.params[0].memref.parent = &shm_0;
+      op.params[0].memref.parent = &scalar_shm_0;
 
       res = TEEC_InvokeCommand(&sess, TA_TEE_CONNECTION_SHARED_MEM, &op, &err_origin);
       if (res != TEEC_SUCCESS) {
           printf("TEEC_InvokeCommand failed: 0x%x, origin: 0x%x\n", res, err_origin);
-      } else {
-          printf("Response from TA: %f\n", shared_data[0]);
       }
       return shared_data[0];
 
     }
 
+    double echo_double(double value) { return min(value, value); }
+
     void sssp_compare(){
+      EnsureSSSPSharedMemory();
       memset(&op, 0, sizeof(op));
       op.paramTypes = TEEC_PARAM_TYPES(TEEC_MEMREF_WHOLE, TEEC_MEMREF_WHOLE, TEEC_NONE, TEEC_NONE);
       op.params[0].memref.parent = &shm_0;
@@ -171,6 +163,9 @@ class TEE_connection {
     }
 
     TEEC_Result allocate_shared_menary_sssp(){
+      if (sssp_shm_ready_) {
+        return TEEC_SUCCESS;
+      }
       size_t size = 1024 * 64 * sizeof(double);
       shm_0.size = size;
       shm_0.flags = TEEC_MEM_INPUT | TEEC_MEM_OUTPUT;
@@ -184,6 +179,7 @@ class TEE_connection {
       if (res != TEEC_SUCCESS) {
         printf("TEEC_AllocateSharedMemory failed: 0x%x\n", res);
       }
+      sssp_shm_ready_ = (res == TEEC_SUCCESS);
       return res;
     }
 
@@ -221,16 +217,19 @@ class TEE_connection {
     }
 
     void* sssp_get_current_buffer(size_t &size){
+      EnsureSSSPSharedMemory();
       size = shm_0.size;
       return shm_0.buffer;
     }
 
     void* sssp_get_target_buffer(size_t &size){
+      EnsureSSSPSharedMemory();
       size = shm_1.size;
       return shm_1.buffer;
     }
 
     void resetSharedMemory(){
+      EnsureSSSPSharedMemory();
       index = 0;
       memset(shm_0.buffer, 0, shm_0.size);
       memset(shm_1.buffer, 0, shm_1.size);
@@ -253,6 +252,26 @@ class TEE_connection {
     }
 
   private:
+    void EnsureScalarSharedMemory() {
+      if (scalar_shm_ready_) {
+        return;
+      }
+      scalar_shm_0.size = sizeof(double) * 2;
+      scalar_shm_0.flags = TEEC_MEM_INPUT | TEEC_MEM_OUTPUT;
+      res = TEEC_AllocateSharedMemory(&ctx, &scalar_shm_0);
+      if (res != TEEC_SUCCESS) {
+        printf("TEEC_AllocateSharedMemory failed: 0x%x\n", res);
+      } else {
+        scalar_shm_ready_ = true;
+      }
+    }
+
+    void EnsureSSSPSharedMemory() {
+      if (!sssp_shm_ready_) {
+        allocate_shared_menary_sssp();
+      }
+    }
+
     TEEC_Result res;
     TEEC_Context ctx;
     TEEC_Session sess;
@@ -262,7 +281,10 @@ class TEE_connection {
 
     TEEC_SharedMemory shm_0;
     TEEC_SharedMemory shm_1;
+    TEEC_SharedMemory scalar_shm_0;
     size_t index;
+    bool scalar_shm_ready_ = false;
+    bool sssp_shm_ready_ = false;
 
 
     int32_t id;

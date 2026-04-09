@@ -5,6 +5,9 @@
 #ifndef LIBGRAPE_LITE_CDLP_SELECTIVE_H
 #define LIBGRAPE_LITE_CDLP_SELECTIVE_H
 
+#ifndef CDLP_SELECTIVE_ENABLE_DEBUG_LOG
+#define CDLP_SELECTIVE_ENABLE_DEBUG_LOG 0
+#endif
 
 #include <grape/grape.h>
 #include <set>
@@ -45,17 +48,21 @@ class CDLPSelective : public ParallelAppBase<FRAG_T, CDLPSelectiveContext<FRAG_T
    */
   void printLabel(const fragment_t& frag, context_t& ctx,
                       message_manager_t& messages){
+#if CDLP_SELECTIVE_ENABLE_DEBUG_LOG
     auto inner_vertices = frag.InnerVertices();
     ctx.ostream << "current label\n";
     for(auto v : inner_vertices ){
       ctx.ostream << "v" << frag.GetId(v) << " : " << ctx.labels[v] << std::endl;
     }
     ctx.ostream << "valid label count :" << ctx.verticesWithValidLabel.Count() << std::endl;
+#endif
   }
 
   void PropagateLabel(const fragment_t& frag, context_t& ctx,
                       message_manager_t& messages) {
+#if CDLP_SELECTIVE_ENABLE_DEBUG_LOG
     ctx.ostream << "PropagateLabel" << std::endl;
+#endif
 #ifdef PROFILING
     ctx.preprocess_time -= GetCurrentTime();
 #endif
@@ -82,8 +89,12 @@ class CDLPSelective : public ParallelAppBase<FRAG_T, CDLPSelectiveContext<FRAG_T
                                                fragment_t>(
                         es, ctx.labels, ctx.labels[v], ctx, frag, conn);//wuyufei
 
-                if (!conn->is_equal(ctx.labels[v] , new_label)) {
-                  ctx.ostream << "Change v" << frag.GetId(v) << " " << ctx.labels[v] << " -> " << new_label << std::endl;
+                if (!SecureEqual(ctx, conn, ctx.labels[v], new_label)) {
+#if CDLP_SELECTIVE_ENABLE_DEBUG_LOG
+                  ctx.ostream << "Change v" << frag.GetId(v) << " "
+                              << ctx.labels[v] << " -> " << new_label
+                              << std::endl;
+#endif
                   new_ilabels[v] = new_label;
                   ctx.changed[v] = true;
                   messages.SendMsgThroughOEdges<fragment_t, label_t>(
@@ -119,8 +130,10 @@ class CDLPSelective : public ParallelAppBase<FRAG_T, CDLPSelectiveContext<FRAG_T
 
   void PEval(const fragment_t& frag, context_t& ctx,
              message_manager_t& messages) {
+#if CDLP_SELECTIVE_ENABLE_DEBUG_LOG
     ctx.ostream.open("log" + std::to_string(frag.fid()) + ".txt");
     ctx.ostream << "============ PEval ================\n";
+#endif
     auto inner_vertices = frag.InnerVertices();
     auto outer_vertices = frag.OuterVertices();
 
@@ -143,9 +156,12 @@ class CDLPSelective : public ParallelAppBase<FRAG_T, CDLPSelectiveContext<FRAG_T
 #else
     ctx.verticesWithValidLabel.ParallelClear(GetThreadPool());
     ForEach(inner_vertices, [&frag, &ctx](int tid, vertex_t v) {
-      std::cout << "v" << frag.GetId(v) << ": " << frag.GetData(v) << " p" << frag.GetSecret(v) << std::endl;
       auto conn = ctx.connection_pool.acquire();
-      if (conn->is_equal(frag.GetData(v), 1)){//标签过滤逻辑
+#if CDLP_SELECTIVE_ENABLE_DEBUG_LOG
+      std::cout << "v" << frag.GetId(v) << ": " << frag.GetData(v) << " p"
+                << frag.GetSecret(v) << std::endl;
+#endif
+      if (SecureEqual(ctx, conn, frag.GetData(v), 1)) {//标签过滤逻辑
         ctx.verticesWithValidLabel.Insert(v);
       }
       ctx.labels[v] = frag.GetInnerVertexId(v);
@@ -153,7 +169,7 @@ class CDLPSelective : public ParallelAppBase<FRAG_T, CDLPSelectiveContext<FRAG_T
     });
     ForEach(outer_vertices, [&frag, &ctx](int tid, vertex_t v) {
       auto conn = ctx.connection_pool.acquire();
-      if (conn->is_equal(frag.GetData(v), 1)){
+      if (SecureEqual(ctx, conn, frag.GetData(v), 1)){
         ctx.verticesWithValidLabel.Insert(v);
       }
       ctx.labels[v] = frag.GetOuterVertexId(v);
@@ -166,7 +182,9 @@ class CDLPSelective : public ParallelAppBase<FRAG_T, CDLPSelectiveContext<FRAG_T
 
   void IncEval(const fragment_t& frag, context_t& ctx,
                message_manager_t& messages) {
+#if CDLP_SELECTIVE_ENABLE_DEBUG_LOG
     ctx.ostream << "=============== IncEval round "<< ctx.step << " ==================\n";
+#endif
     ++ctx.step;
 
 #ifdef PROFILING
@@ -198,6 +216,5 @@ class CDLPSelective : public ParallelAppBase<FRAG_T, CDLPSelectiveContext<FRAG_T
 
 
 #endif  // LIBGRAPE_LITE_CDLP_SELECTIVE_H
-
 
 

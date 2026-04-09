@@ -16,9 +16,16 @@ limitations under the License.
 #ifndef EXAMPLES_ANALYTICAL_APPS_BFS_BFS_CONTEXT_H_
 #define EXAMPLES_ANALYTICAL_APPS_BFS_BFS_CONTEXT_H_
 
+#include <fstream>
 #include <limits>
+#include <string>
 
 #include <grape/grape.h>
+#include <grape/utils/thread_safe_mapper.h>
+
+#include "TEE/connection_pool.h"
+#include "flags.h"
+#include "tee_metrics.h"
 
 namespace grape {
 /**
@@ -35,7 +42,8 @@ class BFSContext : public VertexDataContext<FRAG_T, int64_t> {
 
   explicit BFSContext(const FRAG_T& fragment)
       : VertexDataContext<FRAG_T, int64_t>(fragment, true),
-        partial_result(this->data()) {}
+        partial_result(this->data()),
+        connection_pool(1) {}
 
   void Init(ParallelMessageManager& messages, oid_t src_id) {
     auto& frag = this->fragment();
@@ -44,6 +52,8 @@ class BFSContext : public VertexDataContext<FRAG_T, int64_t> {
     partial_result.SetValue(std::numeric_limits<depth_type>::max());
     avg_degree = static_cast<double>(frag.GetEdgeNum()) /
                  static_cast<double>(frag.GetInnerVerticesNum());
+    private_candidate_result.clear();
+    tee_metrics = TeeMetrics();
 
 #ifdef PROFILING
     preprocess_time = 0;
@@ -59,6 +69,7 @@ class BFSContext : public VertexDataContext<FRAG_T, int64_t> {
     for (auto v : inner_vertices) {
       os << frag.GetId(v) << " " << partial_result[v] << std::endl;
     }
+    DumpTeeMetrics("bfs", static_cast<int>(frag.fid()), tee_metrics);
 #ifdef PROFILING
     VLOG(2) << "preprocess_time: " << preprocess_time << "s.";
     VLOG(2) << "exec_time: " << exec_time << "s.";
@@ -70,6 +81,9 @@ class BFSContext : public VertexDataContext<FRAG_T, int64_t> {
   typename FRAG_T::template vertex_array_t<depth_type>& partial_result;
   DenseVertexSet<typename FRAG_T::inner_vertices_t> curr_inner_updated,
       next_inner_updated;
+  ThreadSafeMapper<oid_t, depth_type> private_candidate_result;
+  ConnectionPool connection_pool;
+  TeeMetrics tee_metrics;
 
   depth_type current_depth = 0;
   double avg_degree = 0;
