@@ -58,10 +58,13 @@ class CDLPSelectiveContext : public VertexDataContext<FRAG_T, typename FRAG_T::o
   void Init(ParallelMessageManager& messages, int max_round) {
     auto& frag = this->fragment();
     auto inner_vertices = frag.InnerVertices();
+    auto vertices = frag.Vertices();
 
     this->max_round = max_round;
     changed.Init(inner_vertices);
-    verticesWithValidLabel.Init(inner_vertices);
+    // The selective-label filter is consulted for both inner and outer
+    // vertices during PEval, so the bitmap must cover the whole local range.
+    verticesWithValidLabel.Init(vertices);
 
 #ifdef PROFILING
     preprocess_time = 0;

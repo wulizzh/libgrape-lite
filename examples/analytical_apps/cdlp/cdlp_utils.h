@@ -19,7 +19,9 @@ limitations under the License.
 #include <TEE/TEE_connection.h>
 #include <algorithm>
 #include <chrono>
+#include <limits>
 #include <random>
+#include <type_traits>
 #include <vector>
 
 #include <grape/grape.h>
@@ -31,12 +33,34 @@ limitations under the License.
 
 namespace grape {
 
+template <typename VALUE_T>
+inline typename std::enable_if<std::is_integral<VALUE_T>::value &&
+                                   std::is_signed<VALUE_T>::value,
+                               bool>::type
+FitsInTeeInt(const VALUE_T& value) {
+  return value >= static_cast<VALUE_T>(std::numeric_limits<int>::min()) &&
+         value <= static_cast<VALUE_T>(std::numeric_limits<int>::max());
+}
+
+template <typename VALUE_T>
+inline typename std::enable_if<std::is_integral<VALUE_T>::value &&
+                                   !std::is_signed<VALUE_T>::value,
+                               bool>::type
+FitsInTeeInt(const VALUE_T& value) {
+  using unsigned_int_t = typename std::make_unsigned<int>::type;
+  return value <=
+         static_cast<VALUE_T>(std::numeric_limits<unsigned_int_t>::max());
+}
+
 template <typename CONTEXT_T, typename VALUE_T>
 inline bool SecureEqual(CONTEXT_T& ctx,
                         const std::shared_ptr<TEE_connection>& conn,
                         const VALUE_T& lhs, const VALUE_T& rhs) {
+  if (!FitsInTeeInt(lhs) || !FitsInTeeInt(rhs)) {
+    return lhs == rhs;
+  }
   auto tee_begin = std::chrono::steady_clock::now();
-  bool equal = conn->is_equal(lhs, rhs);
+  bool equal = conn->is_equal(static_cast<int>(lhs), static_cast<int>(rhs));
   auto tee_end = std::chrono::steady_clock::now();
   double tee_time_ms =
       static_cast<double>(
@@ -126,9 +150,9 @@ inline LABEL_T update_label_fast_selected(const ADJ_LIST_T& edges,
   Vertex<VID_T> v;
   for (auto& e : edges) {
     srcLabel = labels[e.get_neighbor()];
-    frag.GetVertex(srcLabel, v);
-    if(ctx.verticesWithValidLabel.Exist(v))
-        local_labels.emplace_back(labels[e.get_neighbor()]);
+    if (frag.GetVertex(srcLabel, v) && ctx.verticesWithValidLabel.Exist(v)) {
+      local_labels.emplace_back(labels[e.get_neighbor()]);
+    }
   }
   if (local_labels.empty()){//wuyufei: avoid segment fault
     return original_label;
