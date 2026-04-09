@@ -16,6 +16,7 @@
   - the hot sorted-label comparison loop in `update_label_fast_selected()` now measures one aggregated block instead of timing every single equality call
 - Made CDLP tee metric accumulation safe under parallel execution with a context-level mutex.
 - Fixed a GCC 7 template deduction issue in the new CDLP tee metric helper so the server build can pass.
+- Reduced the CDLP connection pool from `2` to `1` so the 8-worker configuration does not exhaust available TEE sessions during startup.
 - Added `scripts/summarize_tee_workers.py` to summarize `*_tee_worker_*.tsv` files and extract:
   - `max_total_tee_time_ms`
   - `max_worker_fragment_id`

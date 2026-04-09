@@ -53,7 +53,7 @@ class CDLPSelectiveContext : public VertexDataContext<FRAG_T, typename FRAG_T::o
 #else
       : VertexDataContext<FRAG_T, typename FRAG_T::oid_t>(fragment, true),
 #endif
-        labels(this->data()), connection_pool(2) {
+        labels(this->data()), connection_pool(1) {
   }
 
   void Init(ParallelMessageManager& messages, int max_round) {
