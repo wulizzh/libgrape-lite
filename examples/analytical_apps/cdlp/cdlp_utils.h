@@ -53,7 +53,7 @@ FitsInTeeInt(const VALUE_T& value) {
          static_cast<VALUE_T>(std::numeric_limits<unsigned_int_t>::max());
 }
 
-template <typename CONTEXT_T, typename VALUE_T>
+template <typename CONTEXT_T>
 inline void RecordCdlpTeeMetrics(CONTEXT_T& ctx, double duration_ms,
                                  size_t item_count) {
   std::lock_guard<std::mutex> guard(ctx.tee_metrics_mutex);

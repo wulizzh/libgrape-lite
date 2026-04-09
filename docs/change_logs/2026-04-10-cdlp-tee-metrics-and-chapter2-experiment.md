@@ -15,6 +15,7 @@
   - per-call timing is still used for the low-frequency equality checks in `PEval()` and the final old/new label comparison
   - the hot sorted-label comparison loop in `update_label_fast_selected()` now measures one aggregated block instead of timing every single equality call
 - Made CDLP tee metric accumulation safe under parallel execution with a context-level mutex.
+- Fixed a GCC 7 template deduction issue in the new CDLP tee metric helper so the server build can pass.
 - Added `scripts/summarize_tee_workers.py` to summarize `*_tee_worker_*.tsv` files and extract:
   - `max_total_tee_time_ms`
   - `max_worker_fragment_id`
