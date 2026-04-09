@@ -20,6 +20,7 @@ limitations under the License.
 #include <algorithm>
 #include <chrono>
 #include <limits>
+#include <mutex>
 #include <random>
 #include <type_traits>
 #include <vector>
@@ -53,14 +54,27 @@ FitsInTeeInt(const VALUE_T& value) {
 }
 
 template <typename CONTEXT_T, typename VALUE_T>
-inline bool SecureEqual(CONTEXT_T& ctx,
-                        const std::shared_ptr<TEE_connection>& conn,
-                        const VALUE_T& lhs, const VALUE_T& rhs) {
+inline void RecordCdlpTeeMetrics(CONTEXT_T& ctx, double duration_ms,
+                                 size_t item_count) {
+  std::lock_guard<std::mutex> guard(ctx.tee_metrics_mutex);
+  ctx.tee_metrics.Record(duration_ms, item_count);
+}
+
+template <typename VALUE_T>
+inline bool SecureEqualNoMetrics(const std::shared_ptr<TEE_connection>& conn,
+                                 const VALUE_T& lhs, const VALUE_T& rhs) {
   if (!FitsInTeeInt(lhs) || !FitsInTeeInt(rhs)) {
     return lhs == rhs;
   }
+  return conn->is_equal(static_cast<int>(lhs), static_cast<int>(rhs));
+}
+
+template <typename CONTEXT_T, typename VALUE_T>
+inline bool SecureEqualTimed(CONTEXT_T& ctx,
+                             const std::shared_ptr<TEE_connection>& conn,
+                             const VALUE_T& lhs, const VALUE_T& rhs) {
   auto tee_begin = std::chrono::steady_clock::now();
-  bool equal = conn->is_equal(static_cast<int>(lhs), static_cast<int>(rhs));
+  bool equal = SecureEqualNoMetrics(conn, lhs, rhs);
   auto tee_end = std::chrono::steady_clock::now();
   double tee_time_ms =
       static_cast<double>(
@@ -68,7 +82,7 @@ inline bool SecureEqual(CONTEXT_T& ctx,
                                                                 tee_begin)
               .count()) /
       1000.0;
-  ctx.tee_metrics.Record(tee_time_ms, 1);
+  RecordCdlpTeeMetrics(ctx, tee_time_ms, 1);
   return equal;
 }
 
@@ -171,8 +185,11 @@ inline LABEL_T update_label_fast_selected(const ADJ_LIST_T& edges,
   int best_count = 0;
   int label_num = local_labels.size();
 
+  size_t secure_compare_count = 0;
+  auto tee_begin = std::chrono::steady_clock::now();
   for (int i = 1; i < label_num; ++i) {
-    if (!SecureEqual(ctx, conn, local_labels[i], local_labels[i - 1])) {
+    ++secure_compare_count;
+    if (!SecureEqualNoMetrics(conn, local_labels[i], local_labels[i - 1])) {
       if (curr_count > best_count) {
 //        best_label = curr_label;
         best_labels.clear();
@@ -186,6 +203,16 @@ inline LABEL_T update_label_fast_selected(const ADJ_LIST_T& edges,
     } else {
       ++curr_count;
     }
+  }
+  auto tee_end = std::chrono::steady_clock::now();
+  if (secure_compare_count != 0) {
+    double tee_time_ms =
+        static_cast<double>(
+            std::chrono::duration_cast<std::chrono::microseconds>(tee_end -
+                                                                  tee_begin)
+                .count()) /
+        1000.0;
+    RecordCdlpTeeMetrics(ctx, tee_time_ms, secure_compare_count);
   }
 
   if (curr_count > best_count) {

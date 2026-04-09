@@ -89,7 +89,7 @@ class CDLPSelective : public ParallelAppBase<FRAG_T, CDLPSelectiveContext<FRAG_T
                                                fragment_t>(
                         es, ctx.labels, ctx.labels[v], ctx, frag, conn);//wuyufei
 
-                if (!SecureEqual(ctx, conn, ctx.labels[v], new_label)) {
+                if (!SecureEqualTimed(ctx, conn, ctx.labels[v], new_label)) {
 #if CDLP_SELECTIVE_ENABLE_DEBUG_LOG
                   ctx.ostream << "Change v" << frag.GetId(v) << " "
                               << ctx.labels[v] << " -> " << new_label
@@ -161,7 +161,7 @@ class CDLPSelective : public ParallelAppBase<FRAG_T, CDLPSelectiveContext<FRAG_T
       std::cout << "v" << frag.GetId(v) << ": " << frag.GetData(v) << " p"
                 << frag.GetSecret(v) << std::endl;
 #endif
-      if (SecureEqual(ctx, conn, frag.GetData(v), 1)) {//标签过滤逻辑
+      if (SecureEqualTimed(ctx, conn, frag.GetData(v), 1)) {//标签过滤逻辑
         ctx.verticesWithValidLabel.Insert(v);
       }
       ctx.labels[v] = frag.GetInnerVertexId(v);
@@ -169,7 +169,7 @@ class CDLPSelective : public ParallelAppBase<FRAG_T, CDLPSelectiveContext<FRAG_T
     });
     ForEach(outer_vertices, [&frag, &ctx](int tid, vertex_t v) {
       auto conn = ctx.connection_pool.acquire();
-      if (SecureEqual(ctx, conn, frag.GetData(v), 1)){
+      if (SecureEqualTimed(ctx, conn, frag.GetData(v), 1)){
         ctx.verticesWithValidLabel.Insert(v);
       }
       ctx.labels[v] = frag.GetOuterVertexId(v);
@@ -216,5 +216,4 @@ class CDLPSelective : public ParallelAppBase<FRAG_T, CDLPSelectiveContext<FRAG_T
 
 
 #endif  // LIBGRAPE_LITE_CDLP_SELECTIVE_H
-
 

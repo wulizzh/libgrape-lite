@@ -17,6 +17,7 @@ limitations under the License.
 #define EXAMPLES_ANALYTICAL_APPS_CDLP_CDLP_SELECTIVE_CONTEXT_H_
 
 #include <fstream>
+#include <mutex>
 #include <vector>
 
 #include <grape/grape.h>
@@ -92,6 +93,7 @@ class CDLPSelectiveContext : public VertexDataContext<FRAG_T, typename FRAG_T::o
   std::ofstream ostream;
   ConnectionPool connection_pool;
   TeeMetrics tee_metrics;
+  std::mutex tee_metrics_mutex;
 
 #ifdef PROFILING
   double preprocess_time = 0;
