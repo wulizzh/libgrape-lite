@@ -215,7 +215,6 @@ class WCC : public ParallelAppBase<FRAG_T, WCCContext<FRAG_T>>,
 
   template <typename OnUpdate>
   size_t ProcessPrivateCandidates(const fragment_t& frag, context_t& ctx,
-                                  size_t deferred_backlog,
                                   OnUpdate on_update) {
     auto candidates = SnapshotPrivateCandidates(ctx);
     if (candidates.empty()) {
@@ -223,8 +222,7 @@ class WCC : public ParallelAppBase<FRAG_T, WCCContext<FRAG_T>>,
     }
 
     PrivateProcessResult result;
-    result.secure_memory_level =
-        deferred_backlog + candidates.size() + ctx.DeferredPrivateQueueSize();
+    result.secure_memory_level = candidates.size();
 
     double planning_overhead_ms = 0.0;
     if (FLAGS_runtime_feedback || FLAGS_tee_ree_coscheduling) {
@@ -361,12 +359,10 @@ class WCC : public ParallelAppBase<FRAG_T, WCCContext<FRAG_T>>,
       }
     });
 
-    size_t deferred_backlog = ctx.DeferredPrivateQueueSize();
-    ctx.MergeDeferredPrivateCandidates();
     size_t private_candidates = ctx.private_candidate_result.size();
-    ctx.runtime_feedback.SetBaselineState(deferred_backlog + private_candidates);
+    ctx.runtime_feedback.SetBaselineState(private_candidates);
     ProcessPrivateCandidates(
-        frag, ctx, deferred_backlog, [&channels, &frag, &ctx](vertex_t v) {
+        frag, ctx, [&channels, &frag, &ctx](vertex_t v) {
           ctx.next_modified.Insert(v);
           if (frag.IsOuterVertex(v)) {
 #ifdef WCC_USE_GID
@@ -406,11 +402,9 @@ class WCC : public ParallelAppBase<FRAG_T, WCCContext<FRAG_T>>,
               }
             });
 
-    size_t deferred_backlog = ctx.DeferredPrivateQueueSize();
-    ctx.MergeDeferredPrivateCandidates();
     size_t private_candidates = ctx.private_candidate_result.size();
-    ctx.runtime_feedback.SetBaselineState(deferred_backlog + private_candidates);
-    ProcessPrivateCandidates(frag, ctx, deferred_backlog, [&ctx](vertex_t v) {
+    ctx.runtime_feedback.SetBaselineState(private_candidates);
+    ProcessPrivateCandidates(frag, ctx, [&ctx](vertex_t v) {
       ctx.next_modified.Insert(v);
     });
 
@@ -526,12 +520,9 @@ class WCC : public ParallelAppBase<FRAG_T, WCCContext<FRAG_T>>,
           }
         });
 
-    size_t deferred_backlog = ctx.DeferredPrivateQueueSize();
-    ctx.MergeDeferredPrivateCandidates();
     size_t message_private_candidates = ctx.private_candidate_result.size();
-    ctx.runtime_feedback.SetBaselineState(deferred_backlog +
-                                          message_private_candidates);
-    ProcessPrivateCandidates(frag, ctx, deferred_backlog, [&ctx](vertex_t v) {
+    ctx.runtime_feedback.SetBaselineState(message_private_candidates);
+    ProcessPrivateCandidates(frag, ctx, [&ctx](vertex_t v) {
       ctx.curr_modified.Insert(v);
     });
 

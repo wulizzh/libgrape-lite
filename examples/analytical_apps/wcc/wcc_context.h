@@ -58,9 +58,7 @@ class WCCContext : public WCCContextType<FRAG_T> {
     curr_modified.Init(frag.Vertices());
     next_modified.Init(frag.Vertices());
     private_candidate_result.clear();
-    deferred_private_candidate_result.clear();
     private_candidate_message_count.clear();
-    deferred_private_message_count.clear();
     deferred_private_rounds.clear();
     runtime_feedback.Init();
     tee_metrics = TeeMetrics();
@@ -85,9 +83,7 @@ class WCCContext : public WCCContextType<FRAG_T> {
 
   DenseVertexSet<typename FRAG_T::vertices_t> curr_modified, next_modified;
   ThreadSafeMapper<oid_t, cid_t> private_candidate_result;
-  ThreadSafeMapper<oid_t, cid_t> deferred_private_candidate_result;
   ThreadSafeMapper<oid_t, size_t> private_candidate_message_count;
-  ThreadSafeMapper<oid_t, size_t> deferred_private_message_count;
   ThreadSafeMapper<oid_t, int> deferred_private_rounds;
   ConnectionPool connection_pool;
   RuntimeFeedbackState runtime_feedback;
@@ -101,33 +97,17 @@ class WCCContext : public WCCContextType<FRAG_T> {
 
   void TrackDeferredPrivateCandidate(const oid_t& oid, cid_t candidate_cid,
                                      size_t pending_messages) {
-    deferred_private_candidate_result.insert_or_update_min(oid, candidate_cid);
-    deferred_private_message_count.insert_or_accumulate(oid, pending_messages);
+    // WCC keeps deferred candidates in the same cache as fresh candidates so
+    // the next round can directly merge new evidence without an extra handoff.
+    private_candidate_result.insert_or_update_min(oid, candidate_cid);
+    private_candidate_message_count.insert_or_accumulate(oid, pending_messages);
     auto rounds = deferred_private_rounds.get(oid);
     int next_rounds = rounds.has_value() ? rounds.value() + 1 : 1;
     deferred_private_rounds.insert_or_update(oid, next_rounds);
   }
 
-  size_t MergeDeferredPrivateCandidates() {
-    auto keys = deferred_private_candidate_result.keys();
-    for (const auto& key : keys) {
-      auto value = deferred_private_candidate_result.get(key);
-      if (value.has_value()) {
-        private_candidate_result.insert_or_update_min(key, value.value());
-      }
-      auto pending_messages = deferred_private_message_count.get(key);
-      if (pending_messages.has_value()) {
-        private_candidate_message_count.insert_or_accumulate(
-            key, pending_messages.value());
-      }
-    }
-    deferred_private_candidate_result.clear();
-    deferred_private_message_count.clear();
-    return keys.size();
-  }
-
   size_t DeferredPrivateQueueSize() const {
-    return deferred_private_candidate_result.size();
+    return deferred_private_rounds.size();
   }
 
   size_t GetPrivateCandidateMessageCount(const oid_t& oid) const {
