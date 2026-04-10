@@ -25,6 +25,7 @@
   - output one figure per algorithm for each metric
 - Kept the worker-side TEE summary logic unchanged:
   - the reported TEE metric is still `max(total_tee_time_ms)` across all worker files
+- Normalized TSV line endings for the worker TEE summary output and stripped trailing carriage returns when the benchmark runner parses scalar values back into CSV.
 
 ## Experimental Conventions Captured In The Scripts
 

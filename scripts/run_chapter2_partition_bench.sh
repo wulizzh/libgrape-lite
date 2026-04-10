@@ -344,7 +344,7 @@ run_one_case() {
 
   if "${cmd[@]}" 2>&1 | tee "$log_path"; then
     local runtime_sec
-    runtime_sec="$(awk '/- run algorithm:/ {print $(NF-1)}' "$log_path" | tail -n 1)"
+    runtime_sec="$(awk '/- run algorithm:/ {print $(NF-1)}' "$log_path" | tail -n 1 | tr -d '\r')"
     if [[ -z "$runtime_sec" ]]; then
       echo "Failed to parse run algorithm time from $log_path" >&2
       exit 1
@@ -356,7 +356,7 @@ run_one_case() {
       --summary "$tee_summary_path" > /dev/null
 
     local max_tee_time_ms
-    max_tee_time_ms="$(awk -F '\t' '$1 == "max_total_tee_time_ms" {print $2}' "$tee_summary_path")"
+    max_tee_time_ms="$(awk -F '\t' '$1 == "max_total_tee_time_ms" {print $2}' "$tee_summary_path" | tr -d '\r')"
     if [[ -z "$max_tee_time_ms" ]]; then
       echo "Failed to parse max tee time from $tee_summary_path" >&2
       exit 1

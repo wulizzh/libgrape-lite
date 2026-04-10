@@ -34,7 +34,7 @@ def load_rows(case_dir, app_name):
 def write_summary(rows, output_path):
     max_row = max(rows, key=lambda item: item["total_tee_time_ms"])
     with open(output_path, "w", encoding="utf-8", newline="") as outfile:
-        writer = csv.writer(outfile, delimiter="\t")
+        writer = csv.writer(outfile, delimiter="\t", lineterminator="\n")
         writer.writerow(["metric", "value"])
         writer.writerow(["worker_count", len(rows)])
         writer.writerow(["max_worker_fragment_id", max_row["fragment_id"]])
