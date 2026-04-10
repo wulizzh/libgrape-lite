@@ -121,3 +121,9 @@ DEFINE_bool(tee_ree_coscheduling, false,
 DEFINE_int32(coscheduling_extra_private_budget, 128,
              "additional private candidates that can be drained from the "
              "collaborative queue when co-scheduling is enabled.");
+DEFINE_int32(coscheduling_min_deferred_rounds, 2,
+             "minimum deferred rounds before a private candidate is considered "
+             "ready for collaborative TEE admission.");
+DEFINE_int32(coscheduling_min_pending_messages, 2,
+             "minimum accumulated pending messages before a deferred private "
+             "candidate is considered ready for collaborative TEE admission.");

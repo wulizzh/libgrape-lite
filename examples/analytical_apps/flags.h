@@ -76,4 +76,6 @@ DECLARE_double(runtime_feedback_slowdown_tolerance);
 DECLARE_double(runtime_feedback_secure_pressure_ratio);
 DECLARE_bool(tee_ree_coscheduling);
 DECLARE_int32(coscheduling_extra_private_budget);
+DECLARE_int32(coscheduling_min_deferred_rounds);
+DECLARE_int32(coscheduling_min_pending_messages);
 #endif  // EXAMPLES_ANALYTICAL_APPS_FLAGS_H_

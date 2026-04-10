@@ -25,6 +25,7 @@ limitations under the License.
 
 #include "TEE/connection_pool.h"
 #include "flags.h"
+#include "runtime_feedback.h"
 #include "tee_metrics.h"
 
 namespace grape {
@@ -53,6 +54,11 @@ class BFSContext : public VertexDataContext<FRAG_T, int64_t> {
     avg_degree = static_cast<double>(frag.GetEdgeNum()) /
                  static_cast<double>(frag.GetInnerVerticesNum());
     private_candidate_result.clear();
+    deferred_private_candidate_result.clear();
+    private_candidate_message_count.clear();
+    deferred_private_message_count.clear();
+    deferred_private_rounds.clear();
+    runtime_feedback.Init();
     tee_metrics = TeeMetrics();
 
 #ifdef PROFILING
@@ -69,6 +75,7 @@ class BFSContext : public VertexDataContext<FRAG_T, int64_t> {
     for (auto v : inner_vertices) {
       os << frag.GetId(v) << " " << partial_result[v] << std::endl;
     }
+    runtime_feedback.DumpRuntimeStats("bfs", static_cast<int>(frag.fid()));
     DumpTeeMetrics("bfs", static_cast<int>(frag.fid()), tee_metrics);
 #ifdef PROFILING
     VLOG(2) << "preprocess_time: " << preprocess_time << "s.";
@@ -77,12 +84,81 @@ class BFSContext : public VertexDataContext<FRAG_T, int64_t> {
 #endif
   }
 
+  void TrackPrivateCandidate(const oid_t& oid, depth_type candidate_depth) {
+    private_candidate_result.insert_or_update_min(oid, candidate_depth);
+    private_candidate_message_count.insert_or_accumulate(
+        oid, static_cast<size_t>(1));
+  }
+
+  void TrackDeferredPrivateCandidate(const oid_t& oid,
+                                     depth_type candidate_depth,
+                                     size_t pending_messages) {
+    deferred_private_candidate_result.insert_or_update_min(oid,
+                                                           candidate_depth);
+    deferred_private_message_count.insert_or_accumulate(oid, pending_messages);
+    auto rounds = deferred_private_rounds.get(oid);
+    int next_rounds = rounds.has_value() ? rounds.value() + 1 : 1;
+    deferred_private_rounds.insert_or_update(oid, next_rounds);
+  }
+
+  size_t MergeDeferredPrivateCandidates() {
+    auto keys = deferred_private_candidate_result.keys();
+    for (const auto& key : keys) {
+      auto value = deferred_private_candidate_result.get(key);
+      if (value.has_value()) {
+        private_candidate_result.insert_or_update_min(key, value.value());
+      }
+      auto pending_messages = deferred_private_message_count.get(key);
+      if (pending_messages.has_value()) {
+        private_candidate_message_count.insert_or_accumulate(
+            key, pending_messages.value());
+      }
+    }
+    deferred_private_candidate_result.clear();
+    deferred_private_message_count.clear();
+    return keys.size();
+  }
+
+  size_t DeferredPrivateQueueSize() const {
+    return deferred_private_candidate_result.size();
+  }
+
+  size_t GetPrivateCandidateMessageCount(const oid_t& oid) const {
+    auto value = private_candidate_message_count.get(oid);
+    if (value.has_value()) {
+      return value.value();
+    }
+    return 0;
+  }
+
+  int GetDeferredPrivateRounds(const oid_t& oid) const {
+    auto value = deferred_private_rounds.get(oid);
+    if (value.has_value()) {
+      return value.value();
+    }
+    return 0;
+  }
+
+  void MarkPrivateCandidateProcessed(const oid_t& oid) {
+    deferred_private_rounds.remove(oid);
+  }
+
+  void ClearPrivateCandidateState() {
+    private_candidate_result.clear();
+    private_candidate_message_count.clear();
+  }
+
   oid_t source_id;
   typename FRAG_T::template vertex_array_t<depth_type>& partial_result;
   DenseVertexSet<typename FRAG_T::inner_vertices_t> curr_inner_updated,
       next_inner_updated;
   ThreadSafeMapper<oid_t, depth_type> private_candidate_result;
+  ThreadSafeMapper<oid_t, depth_type> deferred_private_candidate_result;
+  ThreadSafeMapper<oid_t, size_t> private_candidate_message_count;
+  ThreadSafeMapper<oid_t, size_t> deferred_private_message_count;
+  ThreadSafeMapper<oid_t, int> deferred_private_rounds;
   ConnectionPool connection_pool;
+  RuntimeFeedbackState runtime_feedback;
   TeeMetrics tee_metrics;
 
   depth_type current_depth = 0;

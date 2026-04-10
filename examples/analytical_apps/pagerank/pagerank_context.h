@@ -23,6 +23,7 @@ limitations under the License.
 #include <grape/utils/thread_safe_mapper.h>
 
 #include "TEE/connection_pool.h"
+#include "runtime_feedback.h"
 #include "tee_metrics.h"
 
 namespace grape {
@@ -76,6 +77,11 @@ class PageRankContext : public VertexDataContext<FRAG_T, double> {
     }
     step = 0;
     private_candidate_result.clear();
+    deferred_private_candidate_result.clear();
+    private_candidate_message_count.clear();
+    deferred_private_message_count.clear();
+    deferred_private_rounds.clear();
+    runtime_feedback.Init();
     tee_metrics = TeeMetrics();
   }
 
@@ -86,6 +92,7 @@ class PageRankContext : public VertexDataContext<FRAG_T, double> {
       os << frag.GetId(v) << " " << std::scientific << std::setprecision(15)
          << result[v] << std::endl;
     }
+    runtime_feedback.DumpRuntimeStats("pagerank", static_cast<int>(frag.fid()));
     DumpTeeMetrics("pagerank", static_cast<int>(frag.fid()), tee_metrics);
 #ifdef PROFILING
     VLOG(2) << "preprocess_time: " << preprocess_time << "s.";
@@ -100,7 +107,12 @@ class PageRankContext : public VertexDataContext<FRAG_T, double> {
   std::vector<std::vector<char, Allocator<char>>> send_buffers;
   std::vector<std::vector<char, Allocator<char>>> recv_buffers;
   ThreadSafeMapper<oid_t, double> private_candidate_result;
+  ThreadSafeMapper<oid_t, double> deferred_private_candidate_result;
+  ThreadSafeMapper<oid_t, size_t> private_candidate_message_count;
+  ThreadSafeMapper<oid_t, size_t> deferred_private_message_count;
+  ThreadSafeMapper<oid_t, int> deferred_private_rounds;
   ConnectionPool connection_pool;
+  RuntimeFeedbackState runtime_feedback;
   TeeMetrics tee_metrics;
 
 #ifdef PROFILING
@@ -117,6 +129,68 @@ class PageRankContext : public VertexDataContext<FRAG_T, double> {
 
   double dangling_sum = 0.0;
   double avg_degree = 0;
+
+  void TrackPrivateCandidate(const oid_t& oid, double candidate_value) {
+    private_candidate_result.insert_or_update(oid, candidate_value);
+    private_candidate_message_count.insert_or_accumulate(
+        oid, static_cast<size_t>(1));
+  }
+
+  void TrackDeferredPrivateCandidate(const oid_t& oid, double candidate_value,
+                                     size_t pending_messages) {
+    deferred_private_candidate_result.insert_or_update(oid, candidate_value);
+    deferred_private_message_count.insert_or_accumulate(oid, pending_messages);
+    auto rounds = deferred_private_rounds.get(oid);
+    int next_rounds = rounds.has_value() ? rounds.value() + 1 : 1;
+    deferred_private_rounds.insert_or_update(oid, next_rounds);
+  }
+
+  size_t MergeDeferredPrivateCandidates() {
+    auto keys = deferred_private_candidate_result.keys();
+    for (const auto& key : keys) {
+      auto value = deferred_private_candidate_result.get(key);
+      if (value.has_value()) {
+        private_candidate_result.insert_or_update(key, value.value());
+      }
+      auto pending_messages = deferred_private_message_count.get(key);
+      if (pending_messages.has_value()) {
+        private_candidate_message_count.insert_or_accumulate(
+            key, pending_messages.value());
+      }
+    }
+    deferred_private_candidate_result.clear();
+    deferred_private_message_count.clear();
+    return keys.size();
+  }
+
+  size_t DeferredPrivateQueueSize() const {
+    return deferred_private_candidate_result.size();
+  }
+
+  size_t GetPrivateCandidateMessageCount(const oid_t& oid) const {
+    auto value = private_candidate_message_count.get(oid);
+    if (value.has_value()) {
+      return value.value();
+    }
+    return 0;
+  }
+
+  int GetDeferredPrivateRounds(const oid_t& oid) const {
+    auto value = deferred_private_rounds.get(oid);
+    if (value.has_value()) {
+      return value.value();
+    }
+    return 0;
+  }
+
+  void MarkPrivateCandidateProcessed(const oid_t& oid) {
+    deferred_private_rounds.remove(oid);
+  }
+
+  void ClearPrivateCandidateState() {
+    private_candidate_result.clear();
+    private_candidate_message_count.clear();
+  }
 };
 }  // namespace grape
 
