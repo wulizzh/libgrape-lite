@@ -21,7 +21,7 @@ Options:
   --algorithms LIST       Comma-separated app names.
                           Default: sssp,bfs,pagerank,wcc
   --datasets LIST         Comma-separated dataset names.
-                          Default: web-Google,wiki-topcats,com-lj.ungraph
+                          Default: web-Google,wiki-topcats,com-lj.ungraph,com-orkut.ungraph
   --methods LIST          Comma-separated methods: Hash,Segmented,PESP
                           Default: Hash,Segmented,PESP
   --dry-run               Print commands without executing them.
@@ -51,7 +51,7 @@ CSV_OUTPUT="${CSV_OUTPUT:-}"
 DRY_RUN=false
 
 DEFAULT_ALGORITHMS=("sssp" "bfs" "pagerank" "wcc")
-DEFAULT_DATASETS=("web-Google" "wiki-topcats" "com-lj.ungraph")
+DEFAULT_DATASETS=("web-Google" "wiki-topcats" "com-lj.ungraph" "com-orkut.ungraph")
 DEFAULT_METHODS=("Hash" "Segmented" "PESP")
 
 SELECTED_ALGORITHMS=()
@@ -62,6 +62,7 @@ DATASET_SPECS=(
   "web-Google|GG|/home/hust/ljkdataset/web-google-ratio_dataset|web-Google.e|web-Google|true"
   "wiki-topcats|TC|/home/hust/ljkdataset/wiki-topcats-ratio_dataset|wiki-topcats.e|wiki-topcats|true"
   "com-lj.ungraph|LJ|/home/hust/ljkdataset/com-lj.ungraph-ratio_dataset|com-lj.ungraph.e|com-lj.ungraph|false"
+  "com-orkut.ungraph|OR|/home/hust/ljkdataset/com-orkut.ungraph_dateset|com-orkut.ungraph.e|com-orkut.ungraph|false"
 )
 
 contains_exact() {

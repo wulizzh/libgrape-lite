@@ -14,12 +14,25 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
+matplotlib.rcParams["font.sans-serif"] = [
+    "PingFang SC",
+    "Hiragino Sans GB",
+    "Heiti SC",
+    "STHeiti",
+    "Microsoft YaHei",
+    "SimHei",
+    "Noto Sans CJK SC",
+    "Arial Unicode MS",
+    "DejaVu Sans",
+]
+matplotlib.rcParams["axes.unicode_minus"] = False
+
 
 METHOD_ORDER = ["Hash", "Segmented", "PESP"]
 METHOD_LABELS = {
     "Hash": "Hash",
     "Segmented": "Segmented",
-    "PESP": "Privacy-aware Streaming",
+    "PESP": "隐私感知流式划分",
 }
 METHOD_COLORS = {
     "Hash": "#4C78A8",
@@ -27,13 +40,7 @@ METHOD_COLORS = {
     "PESP": "#54A24B",
 }
 ALGORITHM_ORDER = ["sssp", "bfs", "pagerank", "wcc"]
-ALGORITHM_LABELS = {
-    "sssp": "SSSP",
-    "bfs": "BFS",
-    "pagerank": "PageRank",
-    "wcc": "WCC",
-}
-DATASET_ORDER = ["GG", "TC", "LJ"]
+DATASET_ORDER = ["GG", "TC", "LJ", "OR"]
 
 
 def load_rows(csv_path):
@@ -110,8 +117,8 @@ def finite_values(values):
     return [value for value in values if math.isfinite(value)]
 
 
-def render_algorithm_plot(rows, algorithm, metric_key, ylabel, title_suffix, output_dir):
-    fig, ax = plt.subplots(figsize=(8.6, 4.8))
+def render_algorithm_plot(rows, algorithm, metric_key, ylabel, output_dir):
+    fig, ax = plt.subplots(figsize=(9.4, 4.9))
     x = np.arange(len(DATASET_ORDER), dtype=float)
     width = 0.22
     offsets = [-width, 0.0, width]
@@ -150,9 +157,8 @@ def render_algorithm_plot(rows, algorithm, metric_key, ylabel, title_suffix, out
     ax.axhline(1.0, color="#666666", linestyle="--", linewidth=1.0)
     ax.set_xticks(x)
     ax.set_xticklabels(DATASET_ORDER)
-    ax.set_xlabel("Dataset")
+    ax.set_xlabel("数据集")
     ax.set_ylabel(ylabel)
-    ax.set_title(f"{ALGORITHM_LABELS.get(algorithm, algorithm.upper())} {title_suffix}")
     ax.grid(axis="y", linestyle=":", linewidth=0.8, alpha=0.55)
     ax.set_axisbelow(True)
     ax.spines["top"].set_visible(False)
@@ -211,8 +217,7 @@ def main():
                 algorithm_rows,
                 algorithm,
                 "normalized_runtime",
-                "Normalized Runtime (Hash = 1.0)",
-                "Normalized Total Runtime",
+                "归一化运行时间",
                 os.path.join(args.figure_dir, "runtime"),
             )
         )
@@ -221,8 +226,7 @@ def main():
                 algorithm_rows,
                 algorithm,
                 "normalized_max_tee",
-                "Normalized Max Single-Worker TEE Time (Hash = 1.0)",
-                "Normalized Max Single-Worker TEE Time",
+                "归一化最大单个节点累计TEE执行时间",
                 os.path.join(args.figure_dir, "max_tee"),
             )
         )
