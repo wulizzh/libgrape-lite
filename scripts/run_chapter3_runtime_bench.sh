@@ -137,7 +137,8 @@ ratio_to_percent() {
 
 sanitize_name() {
   local raw="$1"
-  raw="${raw//[^A-Za-z0-9._+-]/_}"
+  raw="${raw//+/Plus}"
+  raw="${raw//[^A-Za-z0-9._-]/_}"
   printf '%s\n' "$raw"
 }
 
