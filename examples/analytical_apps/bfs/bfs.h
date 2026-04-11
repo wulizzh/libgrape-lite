@@ -241,7 +241,8 @@ class BFS : public ParallelAppBase<FRAG_T, BFSContext<FRAG_T>>,
         active_private_vertices + candidates.size() + ctx.DeferredPrivateQueueSize();
 
     double planning_overhead_ms = 0.0;
-    if (FLAGS_runtime_feedback || FLAGS_tee_ree_coscheduling) {
+    if ((FLAGS_runtime_feedback || FLAGS_tee_ree_coscheduling) &&
+        ctx.runtime_feedback.ControlActive()) {
       auto planning_start = std::chrono::steady_clock::now();
       PopulateCandidateUrgency(frag, ctx, candidates);
       std::sort(candidates.begin(), candidates.end(),

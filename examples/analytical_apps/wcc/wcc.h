@@ -225,7 +225,8 @@ class WCC : public ParallelAppBase<FRAG_T, WCCContext<FRAG_T>>,
     result.secure_memory_level = candidates.size();
 
     double planning_overhead_ms = 0.0;
-    if (FLAGS_runtime_feedback || FLAGS_tee_ree_coscheduling) {
+    if ((FLAGS_runtime_feedback || FLAGS_tee_ree_coscheduling) &&
+        ctx.runtime_feedback.ControlActive()) {
       auto planning_start = std::chrono::steady_clock::now();
       PopulateCandidateUrgency(frag, ctx, candidates);
       std::sort(candidates.begin(), candidates.end(),
