@@ -53,6 +53,7 @@ struct LoadGraphSpec {
   bool deserialize;
   std::string deserialization_prefix;
   PESPConfig pesp_config;
+  std::string external_partition_file;
 
   void set_directed(bool val = true) { directed = val; }
   void set_rebalance(bool flag, int weight) {
@@ -71,6 +72,10 @@ struct LoadGraphSpec {
   }
 
   void set_pesp(const PESPConfig& config) { pesp_config = config; }
+
+  void set_external_partition_file(const std::string& path) {
+    external_partition_file = path;
+  }
 };
 
 inline LoadGraphSpec DefaultLoadGraphSpec() {
@@ -81,6 +86,7 @@ inline LoadGraphSpec DefaultLoadGraphSpec() {
   spec.serialize = false;
   spec.deserialize = false;
   spec.pesp_config = DefaultPESPConfig();
+  spec.external_partition_file.clear();
   return spec;
 }
 

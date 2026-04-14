@@ -14,6 +14,14 @@ Options:
   --sssp-source ID        Source vertex for SSSP. Default: 0
   --bfs-source ID         Source vertex for BFS. Default: 0
   --app-concurrency N     Optional --app_concurrency forwarded to run_app
+  --metis-script PATH     Path to build_metis_partition.py.
+                          Default: <script-dir>/build_metis_partition.py
+  --gpmetis-bin PATH      Path to gpmetis. Default: gpmetis
+  --metis-output-dir PATH Cache directory for generated METIS files.
+                          Default: <output-dir>/metis
+  --metis-sort-tmpdir DIR Optional temporary directory forwarded to sort -T
+                          inside the METIS preparation script.
+  --force-rebuild-metis   Rebuild cached METIS partition files.
   --output-dir PATH       Base directory for logs and reports.
                           Default: ./benchmark_outputs/chapter2_partition
   --csv PATH              Output CSV path.
@@ -22,7 +30,7 @@ Options:
                           Default: sssp,bfs,pagerank,wcc
   --datasets LIST         Comma-separated dataset names.
                           Default: web-Google,wiki-topcats,com-lj.ungraph,com-orkut.ungraph
-  --methods LIST          Comma-separated methods: Hash,Segmented,PESP
+  --methods LIST          Comma-separated methods: Hash,Segmented,PESP,METIS
                           Default: Hash,Segmented,PESP
   --dry-run               Print commands without executing them.
   --help                  Show this help message.
@@ -46,6 +54,11 @@ PRIVACY_RATIO="${PRIVACY_RATIO:-0.7}"
 SSSP_SOURCE="${SSSP_SOURCE:-0}"
 BFS_SOURCE="${BFS_SOURCE:-0}"
 APP_CONCURRENCY="${APP_CONCURRENCY:-}"
+METIS_SCRIPT="${METIS_SCRIPT:-${SCRIPT_DIR}/build_metis_partition.py}"
+GPMETIS_BIN="${GPMETIS_BIN:-gpmetis}"
+METIS_OUTPUT_DIR="${METIS_OUTPUT_DIR:-}"
+METIS_SORT_TMPDIR="${METIS_SORT_TMPDIR:-}"
+FORCE_REBUILD_METIS=false
 OUTPUT_DIR="${OUTPUT_DIR:-./benchmark_outputs/chapter2_partition}"
 CSV_OUTPUT="${CSV_OUTPUT:-}"
 DRY_RUN=false
@@ -90,6 +103,9 @@ canonical_method() {
       ;;
     pesp|streaming|privacy-aware-streaming|privacy_aware_streaming)
       printf 'PESP\n'
+      ;;
+    metis)
+      printf 'METIS\n'
       ;;
     *)
       return 1
@@ -167,6 +183,26 @@ while [[ $# -gt 0 ]]; do
       APP_CONCURRENCY="$2"
       shift 2
       ;;
+    --metis-script)
+      METIS_SCRIPT="$2"
+      shift 2
+      ;;
+    --gpmetis-bin)
+      GPMETIS_BIN="$2"
+      shift 2
+      ;;
+    --metis-output-dir)
+      METIS_OUTPUT_DIR="$2"
+      shift 2
+      ;;
+    --metis-sort-tmpdir)
+      METIS_SORT_TMPDIR="$2"
+      shift 2
+      ;;
+    --force-rebuild-metis)
+      FORCE_REBUILD_METIS=true
+      shift
+      ;;
     --output-dir)
       OUTPUT_DIR="$2"
       shift 2
@@ -227,14 +263,74 @@ if [[ -z "$CSV_OUTPUT" ]]; then
   CSV_OUTPUT="${OUTPUT_DIR}/chapter2_partition_results.csv"
 fi
 
+if [[ -z "$METIS_OUTPUT_DIR" ]]; then
+  METIS_OUTPUT_DIR="${OUTPUT_DIR}/metis"
+fi
+
 if [[ "$DRY_RUN" == "false" && ! -x "$RUN_APP" ]]; then
   echo "run_app not found or not executable: $RUN_APP" >&2
   echo "Set --run-app to your build/run_app path." >&2
   exit 1
 fi
 
-mkdir -p "$OUTPUT_DIR" "${OUTPUT_DIR}/logs"
-printf 'algorithm,dataset,dataset_abbr,privacy_ratio,workers,method,directed_flag,runtime_sec,max_tee_time_ms,tee_summary_path,case_dir,log_path\n' > "$CSV_OUTPUT"
+if [[ "$DRY_RUN" == "false" ]]; then
+  if contains_exact "METIS" "${SELECTED_METHODS[@]}" && [[ ! -f "$METIS_SCRIPT" ]]; then
+    echo "METIS helper script not found: $METIS_SCRIPT" >&2
+    exit 1
+  fi
+fi
+
+mkdir -p "$OUTPUT_DIR" "${OUTPUT_DIR}/logs" "$METIS_OUTPUT_DIR"
+printf 'algorithm,dataset,dataset_abbr,privacy_ratio,workers,method,directed_flag,runtime_sec,max_tee_time_ms,external_partition_file,tee_summary_path,case_dir,log_path\n' > "$CSV_OUTPUT"
+
+prepare_metis_partition() {
+  local dataset_name="$1"
+  local dataset_tag="$2"
+  local vfile="$3"
+  local efile="$4"
+  local ratio_pct="$5"
+
+  local metis_dir="${METIS_OUTPUT_DIR}/${dataset_tag}/ratio_${ratio_pct}/workers_${WORKERS}"
+  local output_prefix="${metis_dir}/${dataset_tag}_ratio_${ratio_pct}_${WORKERS}w"
+  local assignment_file="${output_prefix}.metis.assignments.part${WORKERS}.tsv"
+
+  mkdir -p "$metis_dir"
+
+  if [[ "$FORCE_REBUILD_METIS" == "false" && -f "$assignment_file" ]]; then
+    printf '%s\n' "$assignment_file"
+    return 0
+  fi
+
+  local metis_cmd=(
+    python3 "$METIS_SCRIPT"
+    --vfile "$vfile"
+    --efile "$efile"
+    --parts "$WORKERS"
+    --output-prefix "$output_prefix"
+    --gpmetis-bin "$GPMETIS_BIN"
+  )
+
+  if [[ -n "$METIS_SORT_TMPDIR" ]]; then
+    metis_cmd+=(--sort-tmpdir "$METIS_SORT_TMPDIR")
+  fi
+
+  printf '[METIS][%s][%s%%][w=%s] %s\n' \
+    "$dataset_name" "$ratio_pct" "$WORKERS" "${metis_cmd[*]}" >&2
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    printf '%s\n' "$assignment_file"
+    return 0
+  fi
+
+  "${metis_cmd[@]}"
+
+  if [[ ! -f "$assignment_file" ]]; then
+    echo "METIS assignment file was not generated: $assignment_file" >&2
+    exit 1
+  fi
+
+  printf '%s\n' "$assignment_file"
+}
 
 run_one_case() {
   local algorithm="$1"
@@ -279,6 +375,7 @@ run_one_case() {
 
   local segmented_flag
   local pesp_flag
+  local external_partition_file=""
   case "$method" in
     Hash)
       segmented_flag="false"
@@ -292,6 +389,13 @@ run_one_case() {
       segmented_flag="true"
       pesp_flag="true"
       mkdir -p "$pesp_diag_dir"
+      ;;
+    METIS)
+      segmented_flag="true"
+      pesp_flag="false"
+      external_partition_file="$(
+        prepare_metis_partition "$dataset_name" "$dataset_tag" "$vfile" "$efile" "$ratio_pct"
+      )"
       ;;
     *)
       echo "Unsupported method: $method" >&2
@@ -313,6 +417,10 @@ run_one_case() {
     --partition_report=true
     --partition_output_prefix "$report_dir"
   )
+
+  if [[ -n "$external_partition_file" ]]; then
+    cmd+=(--external_partition_file "$external_partition_file")
+  fi
 
   case "$algorithm" in
     sssp)
@@ -373,6 +481,7 @@ run_one_case() {
       "$directed_flag" \
       "$runtime_sec" \
       "$max_tee_time_ms" \
+      "$external_partition_file" \
       "$tee_summary_path" \
       "$case_dir" \
       "$log_path" >> "$CSV_OUTPUT"

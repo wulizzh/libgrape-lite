@@ -39,6 +39,7 @@ DECLARE_int32(degree_threshold);
 DECLARE_bool(opt);
 
 DECLARE_bool(segmented_partition);
+DECLARE_string(external_partition_file);
 DECLARE_bool(rebalance);
 DECLARE_int32(rebalance_vertex_factor);
 

@@ -19,8 +19,11 @@ limitations under the License.
 #include <mpi.h>
 
 #include <algorithm>
+#include <cstdint>
+#include <fstream>
 #include <iostream>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -158,7 +161,11 @@ class EVFragmentLoader {
     }
 
     partitioner_t partitioner(comm_spec_.fnum(), id_list);
-    if (spec.pesp_config.enabled) {
+    if (!spec.external_partition_file.empty()) {
+      CHECK(!vfile.empty()) << "External partitioning requires a vertex file.";
+      ApplyExternalAssignments(spec.external_partition_file, id_list,
+                               partitioner);
+    } else if (spec.pesp_config.enabled) {
       CHECK(!vfile.empty()) << "PESP requires a vertex file.";
       PESPPrePartitioner<oid_t, edata_t, IOADAPTOR_T, LINE_PARSER_T>
           pre_partitioner(comm_spec_);
@@ -233,6 +240,56 @@ class EVFragmentLoader {
   }
 
  private:
+  void ApplyExternalAssignments(const std::string& partition_file,
+                                const std::vector<oid_t>& id_list,
+                                partitioner_t& partitioner) {
+    std::ifstream in(partition_file);
+    CHECK(in.is_open()) << "Failed to open external partition file: "
+                        << partition_file;
+
+    ska::flat_hash_map<oid_t, fid_t> assignments;
+    assignments.reserve(id_list.size());
+
+    std::string line;
+    size_t line_no = 0;
+    while (std::getline(in, line)) {
+      ++line_no;
+      if (line.empty() || line[0] == '#') {
+        continue;
+      }
+      std::istringstream iss(line);
+      oid_t vertex_id;
+      uint64_t raw_fid = 0;
+      CHECK(iss >> vertex_id >> raw_fid)
+          << "Invalid external partition line " << line_no << " in "
+          << partition_file << ": " << line;
+      CHECK_LT(raw_fid, static_cast<uint64_t>(comm_spec_.fnum()))
+          << "External partition line " << line_no
+          << " uses an out-of-range fragment id: " << raw_fid;
+      CHECK(assignments.emplace(vertex_id, static_cast<fid_t>(raw_fid)).second)
+          << "Duplicated vertex id in external partition file at line "
+          << line_no << ": " << vertex_id;
+    }
+    in.close();
+
+    CHECK_EQ(assignments.size(), id_list.size())
+        << "External partition file vertex count mismatch. Expected "
+        << id_list.size() << " assignments, got " << assignments.size() << ".";
+
+    for (const auto& vertex_id : id_list) {
+      auto iter = assignments.find(vertex_id);
+      CHECK(iter != assignments.end())
+          << "Missing external partition assignment for vertex: " << vertex_id;
+      partitioner.SetPartitionId(vertex_id, iter->second);
+    }
+
+    if (comm_spec_.worker_id() == 0) {
+      std::cout << "[Loader] applied external partition file: "
+                << partition_file << ", assignments=" << assignments.size()
+                << std::endl;
+    }
+  }
+
   CommSpec comm_spec_;
 
   BasicFragmentLoader<fragment_t, io_adaptor_t> basic_fragment_loader_;

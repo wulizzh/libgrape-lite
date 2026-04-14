@@ -43,6 +43,9 @@ DEFINE_bool(opt, false, "whether to use optimization.");
 
 DEFINE_bool(segmented_partition, true,
             "whether to use segmented partitioning.");
+DEFINE_string(external_partition_file, "",
+              "optional external partition assignment file. Each non-comment "
+              "line must contain: <vertex_id> <fragment_id>.");
 DEFINE_bool(rebalance, false, "whether to rebalance graph after loading.");
 DEFINE_int32(rebalance_vertex_factor, 0, "vertex factor of rebalancing.");
 

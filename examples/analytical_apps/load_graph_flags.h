@@ -48,6 +48,23 @@ inline void PrepareGraphOutputDirectories() {
 }
 
 inline void ValidatePESPFlags() {
+  if (!FLAGS_external_partition_file.empty()) {
+    if (!FLAGS_segmented_partition) {
+      LOG(FATAL)
+          << "External partition files currently require segmented_partition=true.";
+    }
+    if (FLAGS_rebalance) {
+      LOG(FATAL) << "External partition files do not support rebalance mode.";
+    }
+    if (FLAGS_deserialize) {
+      LOG(FATAL) << "External partition files require loading from raw "
+                    "efile/vfile and do not support deserialize mode.";
+    }
+    if (FLAGS_pesp_partition) {
+      LOG(FATAL) << "external_partition_file and pesp_partition are mutually "
+                    "exclusive.";
+    }
+  }
   if (!FLAGS_pesp_partition) {
     return;
   }
@@ -88,6 +105,9 @@ inline PESPConfig BuildPESPConfigFromFlags() {
 inline bool PartitionReportEnabled() { return FLAGS_partition_report; }
 
 inline std::string GetPartitionStrategyName() {
+  if (!FLAGS_external_partition_file.empty()) {
+    return "external";
+  }
   if (FLAGS_pesp_partition) {
     return "pesp";
   }
@@ -120,6 +140,9 @@ inline void ConfigureGraphSpec(LoadGraphSpec& graph_spec) {
   }
   if (FLAGS_pesp_partition) {
     graph_spec.set_pesp(BuildPESPConfigFromFlags());
+  }
+  if (!FLAGS_external_partition_file.empty()) {
+    graph_spec.set_external_partition_file(FLAGS_external_partition_file);
   }
 }
 
